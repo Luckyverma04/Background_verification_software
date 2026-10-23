@@ -1,0 +1,9 @@
+
+node_modules/
+.env
+.env.*
+!.env.example
+.envsample
+Backend/config/staynearev-92dc7eef687c.json
+**/__pycache__/
+*.py[cod]

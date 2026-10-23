@@ -1,0 +1,610 @@
+﻿
+
+========== package.json ==========
+
+{
+  "name": "frontend",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "lint": "oxlint",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "axios": "^1.20.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "react-router-dom": "^7.18.4"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "@vitejs/plugin-react": "^6.1.1",
+    "oxlint": "^1.81.0",
+    "vite": "^8.3.0"
+  }
+}
+
+
+
+========== src\App.jsx ==========
+
+import { BrowserRouter, Outlet, Route, Routes } from "react-router-dom";
+import Sidebar from "./layout/Sidebar";
+import Topbar from "./layout/Topbar";
+import Dashboard from "./pages/Dashboard";
+import Candidates from "./pages/Candidates";
+import CandidateDetail from "./pages/CandidateDetail";
+import AddCandidate from "./pages/AddCandidate/AddCandidate";
+import SheetImport from "./pages/SheetImport";
+import Runs from "./pages/Runs";
+import RunReview from "./pages/RunReview";
+import "./App.css";
+
+function Layout() {
+  return (
+    <div className="shell">
+      <Sidebar />
+      <div className="main">
+        <Topbar />
+        <main className="content"><Outlet /></main>
+      </div>
+    </div>
+  );
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route element={<Layout />}>
+          <Route index element={<Dashboard />} />
+          <Route path="candidates" element={<Candidates />} />
+          <Route path="candidates/new" element={<AddCandidate />} />
+          <Route path="candidates/:id" element={<CandidateDetail />} />
+          <Route path="sheet-import" element={<SheetImport />} />
+          <Route path="runs" element={<Runs />} />
+          <Route path="runs/:id" element={<RunReview />} />
+          <Route path="*" element={<div className="state">Page not found</div>} />
+        </Route>
+      </Routes>
+    </BrowserRouter>
+  );
+}
+
+
+
+========== src\api\client.js ==========
+
+import axios from "axios";
+
+// Set VITE_API_URL in Frontend/.env to change (e.g. for deployment)
+export const api = axios.create({
+  baseURL: import.meta.env.VITE_API_URL || "http://localhost:5000/api",
+});
+
+// Reviewer name (no login in this app): sent with every request so verifications
+// and manual additions are attributed in the audit trail.
+const REVIEWER_KEY = "bgv.reviewerName";
+export const getReviewerName = () => {
+  try { return localStorage.getItem(REVIEWER_KEY) || ""; } catch { return ""; }
+};
+export const setReviewerName = (name) => {
+  try { localStorage.setItem(REVIEWER_KEY, String(name || "").trim()); } catch { /* storage unavailable */ }
+};
+api.interceptors.request.use((config) => {
+  const name = getReviewerName();
+  if (name) config.headers["X-Reviewer"] = name;
+  return config;
+});
+
+// Pull a readable message out of any axios error
+export const errMsg = (e) =>
+  e?.response?.data?.error ||
+  e?.response?.data?.message ||
+  e?.message ||
+  "Something went wrong";
+
+// ---- Candidates
+export const getCandidates = () => api.get("/candidates").then((r) => r.data.data);
+export const getCandidate = (id) => api.get(`/candidates/${id}`).then((r) => r.data.data);
+export const createCandidate = (body) => api.post("/candidates", body).then((r) => r.data.data);
+export const deleteCandidate = (id) => api.delete(`/candidates/${id}`);
+
+// ---- BGV runs
+export const getRuns = () => api.get("/bgv-runs").then((r) => r.data.data);
+export const getRun = (id) => api.get(`/bgv-runs/${id}`).then((r) => r.data.data);
+export const createRun = (candidateId) =>
+  api.post("/bgv-runs", { candidateId }).then((r) => r.data.data);
+// search + match can take a while (external search APIs)
+export const searchRun = (id) =>
+  api.post(`/bgv-runs/${id}/search`, {}, { timeout: 5 * 60 * 1000 }).then((r) => r.data.data);
+export const matchRun = (id) =>
+  api.post(`/bgv-runs/${id}/match`, {}, { timeout: 5 * 60 * 1000 }).then((r) => r.data.data);
+
+// ---- Matches (human review)
+export const getRelevantMatches = (runId, limit = 15, { view = "shortlist", page = 1 } = {}) =>
+  api.get(`/candidate-matches/run/${runId}/relevant`, { params: { limit, view, page } }).then((r) => r.data);
+export const reviewMatch = (id, reviewStatus, reviewerNotes) =>
+  api.patch(`/candidate-matches/${id}`, { reviewStatus, reviewerNotes }).then((r) => r.data.data);
+
+// ---- Per-platform discovery (each platform has its own target and counts)
+export const getRunPlatforms = (runId) =>
+  api.get(`/bgv-runs/${runId}/platforms`).then((r) => r.data.data);
+export const getPlatformMatches = (runId, platform, { view = "shortlist", page = 1, limit } = {}) =>
+  api.get(`/candidate-matches/run/${runId}/platform/${platform}`, { params: { view, page, ...(limit ? { limit } : {}) } }).then((r) => r.data);
+
+// ---- Permanent verified identities + manual "Add profile"
+export const getKnownProfiles = (runId) =>
+  api.get(`/bgv-runs/${runId}/known-profiles`).then((r) => r.data.data);
+// Resolves { ok, status, data, duplicate?, existing?, message }. A duplicate (409)
+// is an expected answer, not an exception, so the UI can offer to open it.
+export const addProfile = async (runId, body) => {
+  try {
+    const r = await api.post(`/bgv-runs/${runId}/profiles`, body);
+    return { ok: true, status: r.status, ...r.data };
+  } catch (e) {
+    const d = e?.response?.data;
+    if (e?.response?.status === 409 && d?.duplicate) return { ok: false, status: 409, ...d };
+    throw e;
+  }
+};
+export const revokeVerifiedIdentity = (id, reason) =>
+  api.post(`/verified-identities/${id}/revoke`, { reason }).then((r) => r.data.data);
+
+export const updateCandidate = (id, body) => api.patch(`/candidates/${id}`, body).then((r) => r.data.data);
+
+// ---- Google Sheet import (review -> confirm -> sequential search)
+export const getSheetStatus = () => api.get("/sheet-import/status").then((r) => r.data.data);
+export const syncSheet = () => api.post("/sheet-import/sync", {}, { timeout: 2 * 60 * 1000 }).then((r) => r.data.data);
+export const getSheetItems = () => api.get("/sheet-import/items").then((r) => r.data.data);
+export const confirmSheetCandidates = (candidateIds, acknowledgeIncomplete = false) =>
+  api.post("/sheet-import/confirm", { candidateIds, acknowledgeIncomplete }).then((r) => r.data.data);
+export const unconfirmSheetCandidates = (candidateIds) =>
+  api.post("/sheet-import/unconfirm", { candidateIds }).then((r) => r.data.data);
+export const startSheetQueue = (candidateIds) => api.post("/sheet-import/queue/start", { candidateIds }).then((r) => r.data.data);
+export const retrySheetFailed = (candidateIds) => api.post("/sheet-import/queue/retry", { candidateIds }).then((r) => r.data.data);
+export const cancelSheetQueue = (candidateIds) => api.post("/sheet-import/queue/cancel", { candidateIds }).then((r) => r.data.data);
+
+
+
+========== src\pages\SheetImport.jsx ==========
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import {
+  cancelSheetQueue, confirmSheetCandidates, errMsg, getSheetItems, getSheetStatus,
+  retrySheetFailed, startSheetQueue, syncSheet, unconfirmSheetCandidates,
+} from "../api/client";
+import { Badge, ErrorBox, Loading, PageHeader, fmtDate } from "../components/ui";
+
+const LEVEL = { COMPLETE: "Complete", SEARCHABLE: "Searchable (some details missing)", INCOMPLETE: "Incomplete" };
+const QUEUE = { REVIEW: "Waiting for review", QUEUED: "In queue", RUNNING: "Searching nowâ€¦", DONE: "Search done", FAILED: "Search failed" };
+
+export default function SheetImport() {
+  const [status, setStatus] = useState(null);
+  const [items, setItems] = useState(null);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [busy, setBusy] = useState("");
+  const [sel, setSel] = useState(new Set());
+
+  const load = useCallback(async () => {
+    try {
+      const [s, i] = await Promise.all([getSheetStatus(), getSheetItems()]);
+      setStatus(s); setItems(i); setError("");
+    } catch (e) { setError(errMsg(e)); }
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const active = (items || []).some((i) => ["QUEUED", "RUNNING"].includes(i.queueStatus));
+  useEffect(() => {
+    if (!active && !status?.syncing) return undefined;
+    const t = setInterval(load, 4000);
+    return () => clearInterval(t);
+  }, [active, status?.syncing, load]);
+
+  const act = async (name, fn) => {
+    setBusy(name); setNotice(""); setError("");
+    try { await fn(); await load(); } catch (e) { setError(errMsg(e)); }
+    setBusy("");
+  };
+
+  const reviewable = useMemo(() => (items || []).filter((i) => i.candidateId && i.queueStatus === "REVIEW"), [items]);
+  const chosen = useMemo(() => (items || []).filter((i) => sel.has(i.candidateId)), [items, sel]);
+  const chosenReview = chosen.filter((i) => i.queueStatus === "REVIEW");
+  const chosenIncomplete = chosenReview.filter((i) => i.completeness?.level === "INCOMPLETE" || i.completeness?.invalid?.length);
+  const readyConfirmed = (items || []).filter((i) => i.queueStatus === "REVIEW" && i.confirmed);
+  const failed = (items || []).filter((i) => i.queueStatus === "FAILED");
+  const queued = (items || []).filter((i) => i.queueStatus === "QUEUED");
+
+  const toggle = (id) => setSel((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const selectAllReview = () => setSel(new Set(reviewable.map((i) => i.candidateId)));
+
+  const doSync = () => act("sync", async () => {
+    const r = await syncSheet();
+    const skipped = r.skipped?.length ? `, ${r.skipped.length} row(s) skipped (${r.skipped.slice(0, 3).map((x) => `row ${x.row}: ${x.reason}`).join("; ")})` : "";
+    setNotice(`Synced: ${r.imported} new, ${r.updated} updated, ${r.alreadyImported} already imported, ${r.linkedExisting} matched existing${skipped}. Nothing was searched.`);
+  });
+
+  const confirm = (acknowledge) => act("confirm", async () => {
+    const ids = [...sel];
+    const r = await confirmSheetCandidates(ids, acknowledge);
+    setNotice(`${r.confirmed.length} confirmed.${r.needsAcknowledgement.length ? ` ${r.needsAcknowledgement.length} incomplete/invalid not confirmed â€” use "Search with incomplete data" if you really want them.` : ""}`);
+  });
+
+  const confirmIncomplete = () => {
+    const names = chosenIncomplete.map((i) => i.name).join(", ");
+    if (!window.confirm(`Search with incomplete data?\n\n${names}\n\nThese candidates have missing or invalid details. Results may be weaker or less certain. Continue?`)) return;
+    confirm(true);
+  };
+
+  const start = () => {
+    if (!window.confirm(`Start the sequential search for ${readyConfirmed.length} confirmed candidate(s)? They are searched one at a time and this uses your search providers.`)) return;
+    act("start", async () => {
+      const r = await startSheetQueue();
+      setNotice(`${r.queued} candidate(s) queued. They are searched one at a time.`);
+    });
+  };
+
+  if (!status && !error) return <Loading />;
+  const q = status?.queue;
+  const doneCount = q ? q.done : 0;
+
+  return (
+    <>
+      <PageHeader title="Google Sheet" subtitle="Rows are imported automatically; nothing is searched until you confirm.">
+        <button className="btn" onClick={doSync} disabled={busy === "sync" || !status?.configured}>{busy === "sync" ? "Syncingâ€¦" : "âŸ³ Sync now"}</button>
+      </PageHeader>
+
+      {error && <ErrorBox message={error} onRetry={load} />}
+      {notice && <div className="state">{notice}</div>}
+
+      {status && (
+        <div className="card">
+          <h3>Connection</h3>
+          {!status.configured ? (
+            <div className="state error">Not connected: {status.problem}. See the setup steps in the README / .env.example.</div>
+          ) : (
+            <>
+              <div>Connected Â· tab <b>{status.tab || "(first tab)"}</b> Â· checked every {status.pollingMinutes > 0 ? `${status.pollingMinutes} min` : "â€” (manual only)"} (polling, not instant)</div>
+              <div className="muted">Last successful sync: {status.lastSuccessAt ? fmtDate(status.lastSuccessAt) : "never"} Â· Searching is {status.searchEnabled ? "enabled" : "DISABLED"} Â· one-by-one, {Math.round(status.queueDelayMs / 100) / 10}s between candidates</div>
+              {status.lastError && <div className="state error">Last sync problem: {status.lastError}</div>}
+            </>
+          )}
+        </div>
+      )}
+
+      {q && q.review > 0 && (
+        <div className="state">Candidate data imported. Please review completeness before starting searches.</div>
+      )}
+
+      {q && q.total > 0 && (
+        <div className="card">
+          <h3>Search queue</h3>
+          <div>
+            {q.review} to review ({q.reviewConfirmed} confirmed) Â· {q.queued} waiting Â· {q.running} running Â· {doneCount} done Â· {q.failed} failed
+          </div>
+          {q.current?.length > 0 && <div>Now searching: <b>{q.current.map((c) => c.name).join(", ")}</b>{queued.length ? ` Â· ${queued.length} waiting after it` : ""}</div>}
+          <progress max={q.total || 1} value={doneCount} style={{ width: "100%" }} />
+          <div style={{ marginTop: 8, display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button className="btn primary" disabled={!readyConfirmed.length || !status?.searchEnabled || busy === "start"} onClick={start}>
+              Start sequential search ({readyConfirmed.length})
+            </button>
+            {failed.length > 0 && <button className="btn" disabled={busy === "retry"} onClick={() => act("retry", async () => { const r = await retrySheetFailed(); setNotice(`${r.retried} re-queued.`); })}>Retry failed ({failed.length})</button>}
+            {queued.length > 0 && <button className="btn" onClick={() => act("cancel", async () => { const r = await cancelSheetQueue(); setNotice(`${r.cancelled} taken out of the queue.`); })}>Cancel waiting ({queued.length})</button>}
+          </div>
+        </div>
+      )}
+
+      <div className="card flush">
+        <div style={{ padding: 12, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <button className="btn small" onClick={selectAllReview}>Select all awaiting review</button>
+          <button className="btn small" onClick={() => setSel(new Set())}>Clear</button>
+          <span className="muted">{chosen.length} selected</span>
+          <button className="btn small primary" disabled={!chosenReview.length || busy === "confirm"} onClick={() => confirm(false)}>Confirm data is complete</button>
+          <button className="btn small" disabled={!chosenIncomplete.length || busy === "confirm"} onClick={confirmIncomplete}>Search with incomplete dataâ€¦</button>
+          <button className="btn small" disabled={!chosenReview.length} onClick={() => act("unconfirm", async () => { await unconfirmSheetCandidates([...sel]); })}>Un-confirm</button>
+        </div>
+        {!items ? <Loading /> : (
+          <table>
+            <thead><tr><th /><th>Row / Job</th><th>Candidate</th><th>Import</th><th>Completeness</th><th>Missing / invalid</th><th>Search</th><th /></tr></thead>
+            <tbody>
+              {items.map((i) => (
+                <tr key={i.id}>
+                  <td><input type="checkbox" disabled={i.queueStatus !== "REVIEW" || !i.candidateId} checked={sel.has(i.candidateId)} onChange={() => toggle(i.candidateId)} /></td>
+                  <td>#{i.rowNumber}<div className="muted">{i.jobId || "â€”"}</div></td>
+                  <td>{i.candidateId ? <Link to={`/candidates/${i.candidateId}`}>{i.name}</Link> : "â€”"}<div className="muted">{i.email}</div></td>
+                  <td><Badge value={i.importStatus} />{i.duplicateReason && <div className="muted">{i.duplicateReason}</div>}{i.sourceDuplicateStatus && <div className="muted">sheet: {i.sourceDuplicateStatus}</div>}</td>
+                  <td>{i.completeness ? <><Badge value={i.completeness.level} /><div className="muted">{LEVEL[i.completeness.level]}</div></> : "â€”"}</td>
+                  <td style={{ maxWidth: 260 }}>
+                    {i.completeness?.missing?.length > 0 && <div>Missing: {i.completeness.missing.join(", ")}</div>}
+                    {i.completeness?.invalid?.length > 0 && <div className="muted">Invalid: {i.completeness.invalid.map((x) => `${x.field} (${x.reason})`).join("; ")}</div>}
+                    {i.completeness?.identifiers?.length > 0 && <div className="muted">Can search by: {i.completeness.identifiers.join(", ")}</div>}
+                    {i.candidateId && <Link className="btn small" to={`/candidates/${i.candidateId}`}>Edit details</Link>}
+                  </td>
+                  <td>
+                    <Badge value={i.queueStatus} />
+                    <div className="muted">{QUEUE[i.queueStatus]}{i.queuePosition ? ` Â· #${i.queuePosition}` : ""}{i.confirmed && i.queueStatus === "REVIEW" ? " Â· confirmed" : ""}{i.incompleteOverride ? " Â· incomplete override" : ""}</div>
+                    {i.error && <div className="state error" style={{ padding: 4 }}>{i.error}</div>}
+                  </td>
+                  <td className="right">{i.bgvRun && <Link className="btn small" to={`/runs/${i.bgvRun}`}>Open results</Link>}</td>
+                </tr>
+              ))}
+              {items.length === 0 && <tr><td colSpan="8" className="muted">No rows imported yet. Press â€œSync nowâ€.</td></tr>}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </>
+  );
+}
+
+
+
+========== src\layout\Sidebar.jsx ==========
+
+import { NavLink } from "react-router-dom";
+
+const links = [
+  { to: "/", label: "Dashboard", icon: "â–¦", end: true },
+  { to: "/candidates", label: "Candidates", icon: "â˜º" },
+  { to: "/candidates/new", label: "Add Candidate", icon: "ï¼‹" },
+  { to: "/sheet-import", label: "Google Sheet", icon: "â‡©" },
+  { to: "/runs", label: "Verification Runs", icon: "â—Ž" },
+];
+
+export default function Sidebar() {
+  return (
+    <aside className="sidebar">
+      <div className="brand"><span className="logo">B</span> BGV Automation</div>
+      <nav>
+        {links.map((l) => (
+          <NavLink key={l.to} to={l.to} end={l.end} className={({ isActive }) => (isActive ? "active" : "")}>
+            <span className="ico">{l.icon}</span>{l.label}
+          </NavLink>
+        ))}
+      </nav>
+      <div className="side-foot">Background verification, with a human in the loop.</div>
+    </aside>
+  );
+}
+
+
+
+========== src\layout\Topbar.jsx ==========
+
+import { useEffect, useState } from "react";
+import { api } from "../api/client";
+
+export default function Topbar() {
+  const [online, setOnline] = useState(null);
+
+  useEffect(() => {
+    const ping = () =>
+      api.get("/health").then(() => setOnline(true)).catch(() => setOnline(false));
+    ping();
+    const t = setInterval(ping, 30000);
+    return () => clearInterval(t);
+  }, []);
+
+  return (
+    <header className="topbar">
+      <span className="muted">Candidate verification console</span>
+      <span className={`pill ${online === null ? "" : online ? "ok" : "bad"}`}>
+        <i /> {online === null ? "Checking APIâ€¦" : online ? "API connected" : "API offline"}
+      </span>
+    </header>
+  );
+}
+
+
+
+========== src\pages\Candidates.jsx ==========
+
+import { useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { createRun, deleteCandidate, errMsg, getCandidates } from "../api/client";
+import useAsync from "../components/useAsync";
+import { Badge, ErrorBox, Loading, PageHeader } from "../components/ui";
+
+export default function Candidates() {
+  const nav = useNavigate();
+  const { data, loading, error, reload } = useAsync(getCandidates);
+  const [q, setQ] = useState("");
+  const [busy, setBusy] = useState(null);
+  const [actionError, setActionError] = useState("");
+
+  const rows = useMemo(() => {
+    const s = q.trim().toLowerCase();
+    if (!data) return [];
+    return s
+      ? data.filter((c) => [c.fullName, c.email, c.currentCompany].some((v) => v?.toLowerCase().includes(s)))
+      : data;
+  }, [data, q]);
+
+  const startBgv = async (c) => {
+    setBusy(c._id); setActionError("");
+    try {
+      const run = await createRun(c._id);
+      nav(`/runs/${run._id}`);
+    } catch (e) { setActionError(errMsg(e)); setBusy(null); }
+  };
+
+  const remove = async (c) => {
+    if (!window.confirm(`Delete ${c.fullName}?`)) return;
+    try { await deleteCandidate(c._id); reload(); } catch (e) { setActionError(errMsg(e)); }
+  };
+
+  return (
+    <>
+      <PageHeader title="Candidates" subtitle={data ? `${data.length} total` : ""}>
+        <input className="search" placeholder="Search name, email, companyâ€¦" value={q} onChange={(e) => setQ(e.target.value)} />
+        <Link className="btn primary" to="/candidates/new">+ Add candidate</Link>
+      </PageHeader>
+
+      {actionError && <div className="state error">{actionError}</div>}
+      {loading ? <Loading /> : error ? <ErrorBox message={error} onRetry={reload} /> : (
+        <div className="card flush">
+          <table>
+            <thead><tr><th>Name</th><th>Current role</th><th>Contact</th><th>Status</th><th /></tr></thead>
+            <tbody>
+              {rows.map((c) => (
+                <tr key={c._id}>
+                  <td><Link to={`/candidates/${c._id}`}><b>{c.fullName}</b></Link></td>
+                  <td>{[c.currentJobTitle, c.currentCompany].filter(Boolean).join(" Â· ") || "â€”"}</td>
+                  <td className="muted">{c.email || c.phone || "â€”"}</td>
+                  <td><Badge value={c.verificationStatus} /></td>
+                  <td className="right nowrap">
+                    <button className="btn small primary" disabled={busy === c._id} onClick={() => startBgv(c)}>
+                      {busy === c._id ? "Startingâ€¦" : "Start BGV"}
+                    </button>{" "}
+                    <button className="btn small danger" onClick={() => remove(c)}>Delete</button>
+                  </td>
+                </tr>
+              ))}
+              {rows.length === 0 && <tr><td colSpan="5" className="muted">No candidates found.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
+  );
+}
+
+
+
+========== src\App.css ==========
+
+.shell { display: flex; min-height: 100vh; }
+.sidebar { width: 232px; background: var(--side); color: #c9cbe0; padding: 20px 14px; display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; }
+.brand { color: #fff; font-weight: 700; font-size: 16px; display: flex; align-items: center; gap: 10px; padding: 0 8px 22px; }
+.logo { background: var(--brand); width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; }
+.sidebar nav { display: flex; flex-direction: column; gap: 4px; }
+.sidebar nav a { color: #c9cbe0; padding: 9px 12px; border-radius: 8px; display: flex; gap: 10px; align-items: center; }
+.sidebar nav a:hover { background: #ffffff12; text-decoration: none; }
+.sidebar nav a.active { background: var(--brand); color: #fff; }
+.ico { width: 18px; text-align: center; }
+.side-foot { margin-top: auto; font-size: 12px; color: #8387a6; padding: 0 8px; }
+
+.main { flex: 1; min-width: 0; }
+.topbar { display: flex; justify-content: space-between; align-items: center; padding: 12px 28px; border-bottom: 1px solid var(--line); background: var(--card); position: sticky; top: 0; z-index: 5; }
+.pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 4px 10px; border-radius: 99px; background: var(--gray-bg); color: var(--gray); }
+.pill i { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.pill.ok { background: var(--green-bg); color: var(--green); } .pill.bad { background: var(--red-bg); color: var(--red); }
+.content { padding: 24px 28px 60px; max-width: 1180px; }
+
+.page-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
+.page-header p { margin: 4px 0 0; }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.muted { color: var(--muted); } .right { text-align: right; } .nowrap { white-space: nowrap; }
+
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 18px; margin-bottom: 16px; }
+.card.flush { padding: 0; overflow-x: auto; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px; margin-bottom: 16px; }
+.stat { margin: 0; display: flex; flex-direction: column; } .stat b { font-size: 28px; }
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; } .two-col .card { margin-bottom: 16px; }
+.field { display: grid; grid-template-columns: 110px 1fr; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line); } .field:last-child { border: 0; }
+.item { padding: 6px 0; }
+
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; }
+th, td { padding: 11px 16px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.card:not(.flush) th, .card:not(.flush) td { padding-left: 8px; padding-right: 8px; }
+tr:last-child td { border-bottom: 0; }
+
+.btn { border: 1px solid var(--line); background: var(--card); color: var(--ink); padding: 8px 14px; border-radius: 8px; cursor: pointer; font: inherit; font-weight: 500; display: inline-block; }
+.btn:hover { text-decoration: none; border-color: var(--brand); }
+.btn.small { padding: 4px 10px; font-size: 13px; }
+.btn.primary { background: var(--brand); color: var(--brand-ink); border-color: var(--brand); }
+.btn.primary:hover { filter: brightness(1.1); }
+.btn.danger { color: var(--red); } .btn.danger:hover { border-color: var(--red); }
+.btn.approve { background: var(--green-bg); color: var(--green); border-color: transparent; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+input { font: inherit; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; width: 100%; }
+input:focus { outline: 2px solid color-mix(in srgb, var(--brand) 40%, transparent); border-color: var(--brand); }
+.search { width: 260px; }
+
+.badge { display: inline-block; padding: 2px 9px; border-radius: 99px; font-size: 11.5px; font-weight: 600; white-space: nowrap; }
+.badge.gray { background: var(--gray-bg); color: var(--gray); } .badge.green { background: var(--green-bg); color: var(--green); }
+.badge.red { background: var(--red-bg); color: var(--red); } .badge.amber { background: var(--amber-bg); color: var(--amber); } .badge.blue { background: var(--blue-bg); color: var(--blue); }
+
+.state { padding: 14px 16px; border-radius: 10px; background: var(--card); border: 1px dashed var(--line); color: var(--muted); margin-bottom: 14px; display: flex; gap: 12px; align-items: center; }
+.state.error { background: var(--red-bg); color: var(--red); border: 0; }
+
+/* wizard */
+.steps { display: flex; gap: 8px; list-style: none; padding: 0; margin: 0 0 22px; flex-wrap: wrap; }
+.steps li { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 99px; background: var(--gray-bg); color: var(--muted); cursor: pointer; }
+.steps li b { width: 20px; height: 20px; border-radius: 50%; background: var(--card); display: grid; place-items: center; font-size: 12px; }
+.steps li.on { background: var(--brand); color: #fff; } .steps li.done { background: var(--green-bg); color: var(--green); }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; } .grid2 .full { grid-column: 1 / -1; }
+label { display: flex; flex-direction: column; gap: 5px; font-weight: 500; font-size: 13px; }
+.subhead { display: flex; justify-content: space-between; align-items: center; margin: 22px 0 10px; } .subhead h3 { margin: 0; }
+.repeat { border: 1px solid var(--line); border-radius: 10px; padding: 14px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 10px; align-items: flex-start; } .repeat .grid2 { width: 100%; }
+.actions { display: flex; justify-content: space-between; margin-top: 24px; }
+
+/* review */
+.match-head { display: flex; justify-content: space-between; gap: 16px; }
+.match-head h3 { display: flex; gap: 8px; align-items: center; font-size: 16px; }
+.score { text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; min-width: 120px; }
+.score b { font-size: 30px; line-height: 1; } .score span { font-size: 12px; color: var(--muted); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 14px 0 10px; }
+.chip { font-size: 12px; padding: 3px 10px; border-radius: 99px; background: var(--gray-bg); color: var(--muted); }
+.chip.yes { background: var(--green-bg); color: var(--green); }
+.why { margin: 8px 0; color: var(--ink); }
+.conflicts { background: var(--red-bg); color: var(--red); padding: 10px 12px; border-radius: 8px; margin: 10px 0; }
+.review { display: flex; gap: 8px; align-items: center; margin-top: 12px; padding-top: 14px; border-top: 1px solid var(--line); flex-wrap: wrap; } .review input { flex: 1; min-width: 180px; }
+
+@media (max-width: 800px) {
+  .shell { flex-direction: column; } .sidebar { width: 100%; height: auto; position: static; padding: 12px; }
+  .sidebar nav { flex-direction: row; flex-wrap: wrap; } .side-foot { display: none; } .brand { padding-bottom: 10px; }
+  .content { padding: 16px; } .two-col, .grid2 { grid-template-columns: 1fr; } .search { width: 100%; }
+  .match-head { flex-direction: column; } .score { align-items: flex-start; text-align: left; }
+}
+
+/* ---- platform tabs ---- */
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 14px; }
+.tab { border: 1px solid var(--border, #d9dde3); background: #fff; border-radius: 99px; padding: 5px 12px; font-size: 13px; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+.tab.active { background: #1f2937; color: #fff; border-color: #1f2937; }
+.tab.dim { opacity: .55; }
+.tab small { font-size: 11px; opacity: .8; }
+.platform-panel { margin-bottom: 14px; }
+.platform-panel .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; margin: 10px 0; }
+.platform-panel .grid div { display: flex; flex-direction: column; } .platform-panel .grid b { font-size: 20px; }
+
+/* verified identities / add profile */
+.known-panel { margin-bottom: 18px; }
+.card.known { border-left: 4px solid var(--green); }
+.add-profile { margin-bottom: 16px; }
+.grid-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+.grid-form label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+.grid-form input, .grid-form select { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--card); color: var(--ink); }
+.flash { outline: 2px solid var(--brand); }
+
+
+
+========== src\index.css ==========
+
+:root {
+  --bg: #f4f5f9; --card: #fff; --ink: #1b1d2a; --muted: #6b7084; --line: #e4e6ee;
+  --brand: #4f46e5; --brand-ink: #fff; --side: #14152b;
+  --green: #12805c; --green-bg: #dcf5ea; --red: #c0392b; --red-bg: #fde4e1;
+  --amber: #9a6700; --amber-bg: #fdf0cc; --blue: #2459c4; --blue-bg: #e1ebfd; --gray: #596073; --gray-bg: #eceef4;
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0e0f1c; --card: #181a2e; --ink: #e8e9f3; --muted: #9a9fb8; --line: #2a2d47; --brand: #7c74ff; --side: #0a0b16;
+    --green: #4fd1a0; --green-bg: #12382d; --red: #ff8a7d; --red-bg: #3d1b19;
+    --amber: #f3c75a; --amber-bg: #3b300f; --blue: #8db4ff; --blue-bg: #172a52; --gray: #b3b8cc; --gray-bg: #25283e;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-size: 14px; line-height: 1.5; }
+a { color: var(--brand); text-decoration: none; word-break: break-all; }
+a:hover { text-decoration: underline; }
+h1 { font-size: 22px; margin: 0; } h2 { font-size: 17px; margin: 24px 0 12px; } h3 { font-size: 15px; margin: 0 0 10px; }
+
