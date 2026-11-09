@@ -35,17 +35,6 @@ app.get("/api/health", (req, res) => {
   });
 });
 
-// ==========================================
-// TEMPORARY CANDIDATE MATCH TEST
-// GET /api/candidate-matches-test
-// ==========================================
-app.get("/api/candidate-matches-test", (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: "Candidate match route reached from server.js",
-  });
-});
-
 app.use("/api/candidates", candidateRoutes);
 app.use("/api/uploads", uploadRoutes);
 app.use("/api/sheet-import", sheetImportRoutes);
