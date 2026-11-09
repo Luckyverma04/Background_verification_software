@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { changePassword, errMsg } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
-import { PageHeader } from "../components/ui";
+import Icon from "../components/Icon";
+import { Avatar, Badge, Notice, PageHeader } from "../components/ui";
 
 export default function Account() {
   const { user, replaceSession } = useAuth();
@@ -26,9 +27,18 @@ export default function Account() {
 
   return (
     <>
-      <PageHeader title="My account" subtitle={`${user?.name} · ${user?.email} · ${user?.role}`} />
-      <form className="card narrow-form" onSubmit={submit}>
-        <h3>Change password</h3>
+      <PageHeader title="My account" subtitle="Your profile and sign-in settings." />
+      <div className="card" style={{ maxWidth: 520 }}>
+        <div className="hero">
+          <Avatar name={user?.name} size={60} />
+          <div className="grow">
+            <div className="row"><h3 style={{ margin: 0, fontSize: 18 }}>{user?.name}</h3><Badge value={user?.role} /></div>
+            <div className="muted">{user?.email}</div>
+          </div>
+        </div>
+      </div>
+      <form className="card narrow-form" style={{ maxWidth: 520 }} onSubmit={submit}>
+        <h3 style={{ margin: 0 }}><Icon name="lock" size={17} /> Change password</h3>
         <label>Current password
           <input type="password" autoComplete="current-password" value={form.current} onChange={set("current")} required />
         </label>
@@ -38,9 +48,9 @@ export default function Account() {
         <label>Repeat new password
           <input type="password" autoComplete="new-password" value={form.repeat} onChange={set("repeat")} minLength={8} required />
         </label>
-        {err && <div className="state error">{err}</div>}
-        {msg && <div className="state">{msg}</div>}
-        <button className="btn primary" type="submit" disabled={busy}>{busy ? "Saving…" : "Change password"}</button>
+        {err && <Notice tone="error">{err}</Notice>}
+        {msg && <Notice tone="success">{msg}</Notice>}
+        <button className="btn primary" style={{ alignSelf: "flex-start" }} type="submit" disabled={busy}>{busy ? "Saving…" : "Change password"}</button>
       </form>
     </>
   );

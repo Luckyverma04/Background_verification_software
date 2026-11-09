@@ -59,6 +59,12 @@ export const getCandidates = () => api.get("/candidates").then((r) => r.data.dat
 export const getCandidate = (id) => api.get(`/candidates/${id}`).then((r) => r.data.data);
 export const createCandidate = (body) => api.post("/candidates", body).then((r) => r.data.data);
 export const deleteCandidate = (id) => api.delete(`/candidates/${id}`);
+// Uploads a photo (multipart field "image") to Cloudinary via the backend
+export const uploadCandidateImage = (file) => {
+  const form = new FormData();
+  form.append("image", file);
+  return api.post("/uploads/candidate-image", form, { timeout: 60 * 1000 }).then((r) => r.data.data);
+};
 
 // ---- BGV runs
 export const getRuns = () => api.get("/bgv-runs").then((r) => r.data.data);

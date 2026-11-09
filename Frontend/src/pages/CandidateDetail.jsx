@@ -1,20 +1,30 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { createRun, errMsg, getCandidate, getRuns, updateCandidate } from "../api/client";
+import Icon from "../components/Icon";
 import useAsync from "../components/useAsync";
-import { Badge, ErrorBox, Loading, PageHeader, fmtDate } from "../components/ui";
+import { Avatar, Badge, Empty, ErrorBox, Loading, Notice, fmtDate, fmtDay } from "../components/ui";
 
-const Field = ({ label, children }) => (
-  <div className="field"><span className="muted">{label}</span><div>{children || "—"}</div></div>
+const Field = ({ icon, label, children }) => (
+  <div className="field">
+    <span className="muted">{icon && <Icon name={icon} size={15} />}{label}</span>
+    <div>{children || <span className="muted">—</span>}</div>
+  </div>
 );
-const link = (u) => u && <a href={u} target="_blank" rel="noreferrer">{u}</a>;
+
+const SOCIAL = [
+  ["linkedin", "LinkedIn"], ["github", "GitHub"], ["twitter", "Twitter / X"],
+  ["instagram", "Instagram"], ["facebook", "Facebook"], ["website", "Website"],
+];
+
 const FIELDS = [
-  ["fullName", "Full name"], ["email", "Email"], ["phone", "Phone"], ["dateOfBirth", "Date of birth", "date"],
+  ["fullName", "Full name"], ["email", "Email", "email"], ["phone", "Phone", "tel"], ["dateOfBirth", "Date of birth", "date"],
   ["address", "Address"], ["city", "City"], ["state", "State"], ["country", "Country"],
   ["currentCompany", "Current company"], ["currentJobTitle", "Current job title"],
   ["linkedin", "LinkedIn URL"], ["facebook", "Facebook URL"], ["twitter", "Twitter / X URL"], ["instagram", "Instagram URL"],
   ["github", "GitHub URL"], ["website", "Website"], ["sourceImageUrl", "Profile image URL"],
 ];
+
 const initial = (c) => ({
   ...Object.fromEntries(FIELDS.map(([k]) => [k, c[k] || ""])),
   city: c.location?.city || "", state: c.location?.state || "", country: c.location?.country || "",
@@ -25,6 +35,7 @@ function EditForm({ candidate, onSaved, onCancel }) {
   const [f, setF] = useState(initial(candidate));
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
+
   const save = async (e) => {
     e.preventDefault(); setSaving(true); setErr("");
     const { city, state, country, ...rest } = f;
@@ -32,21 +43,24 @@ function EditForm({ candidate, onSaved, onCancel }) {
     body.location = { city: city.trim(), state: state.trim(), country: country.trim() };
     try { await updateCandidate(candidate._id, body); onSaved(); } catch (x) { setErr(errMsg(x)); setSaving(false); }
   };
+
   return (
-    <form className="card" onSubmit={save}>
-      <h3>Edit candidate</h3>
-      <p className="muted">Fill in missing details. Sheet-imported completeness is re-checked as soon as you save. Blank fields are left unchanged.</p>
-      {err && <div className="state error">{err}</div>}
-      {editing && <EditForm candidate={c} onCancel={() => setEditing(false)} onSaved={() => { setEditing(false); reload(); }} />}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(240px,1fr))", gap: 10 }}>
+    <form className="card add-profile" onSubmit={save}>
+      <div className="card-head">
+        <h3><Icon name="edit" size={17} />Edit candidate</h3>
+        <button type="button" className="icon-btn" onClick={onCancel} aria-label="Close"><Icon name="x" /></button>
+      </div>
+      <p className="muted" style={{ marginTop: -6 }}>Fill in missing details. Blank fields are left unchanged; completeness is re-checked when you save.</p>
+      {err && <Notice tone="error">{err}</Notice>}
+      <div className="grid-form">
         {FIELDS.map(([k, label, type]) => (
-          <label key={k} className="field"><span className="muted">{label}</span>
+          <label key={k}>{label}
             <input type={type || "text"} value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })} required={k === "fullName"} />
           </label>
         ))}
       </div>
-      <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
-        <button className="btn primary" disabled={saving}>{saving ? "Saving…" : "Save"}</button>
+      <div className="row mt">
+        <button className="btn primary" disabled={saving}><Icon name="check" size={16} />{saving ? "Saving…" : "Save changes"}</button>
         <button type="button" className="btn" onClick={onCancel}>Cancel</button>
       </div>
     </form>
@@ -65,11 +79,14 @@ export default function CandidateDetail() {
   const [starting, setStarting] = useState(false);
   const [err, setErr] = useState("");
   const [editing, setEditing] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   if (loading) return <Loading />;
   if (error) return <ErrorBox message={error} onRetry={reload} />;
   const { candidate: c, runs } = data;
   const loc = [c.location?.city, c.location?.state, c.location?.country].filter(Boolean).join(", ");
+  const role = [c.currentJobTitle, c.currentCompany].filter(Boolean).join(" at ");
+  const socials = SOCIAL.filter(([k]) => c[k]);
 
   const start = async () => {
     setStarting(true); setErr("");
@@ -79,62 +96,105 @@ export default function CandidateDetail() {
 
   return (
     <>
-      <PageHeader title={c.fullName} subtitle={[c.currentJobTitle, c.currentCompany].filter(Boolean).join(" at ")}>
-        <Badge value={c.verificationStatus} />
-        <button className="btn" onClick={() => setEditing(true)}>Edit</button>
-        <button className="btn primary" disabled={starting} onClick={start}>{starting ? "Starting…" : "Start BGV"}</button>
-      </PageHeader>
-      {err && <div className="state error">{err}</div>}
+      <div className="eyebrow" style={{ marginBottom: 14 }}><Link to="/candidates"><Icon name="arrowLeft" size={14} /> Candidates</Link></div>
+
+      <div className="card">
+        <div className="hero">
+          <Avatar name={c.fullName} src={c.sourceImageUrl} size={76} />
+          <div className="grow">
+            <div className="row"><h1>{c.fullName}</h1><Badge value={c.verificationStatus} /></div>
+            <div className="meta">
+              {role && <span><Icon name="briefcase" size={15} />{role}</span>}
+              {loc && <span><Icon name="pin" size={15} />{loc}</span>}
+              {c.email && <span><Icon name="mail" size={15} />{c.email}</span>}
+            </div>
+          </div>
+          <div className="row">
+            <button className="btn" onClick={() => { setEditing((v) => !v); setSaved(false); }}><Icon name="edit" size={16} />Edit</button>
+            <button className="btn primary" disabled={starting} onClick={start}><Icon name="play" size={14} />{starting ? "Starting…" : "Start BGV"}</button>
+          </div>
+        </div>
+        {socials.length > 0 && (
+          <>
+            <hr className="divider" />
+            <div className="social-links">
+              {socials.map(([k, label]) => (
+                <a key={k} href={c[k]} target="_blank" rel="noreferrer"><Icon name={k === "website" ? "globe" : "link"} size={14} />{label}</a>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+
+      {err && <Notice tone="error" onClose={() => setErr("")}>{err}</Notice>}
+      {saved && <Notice tone="success" onClose={() => setSaved(false)}>Candidate updated.</Notice>}
+      {editing && <EditForm candidate={c} onCancel={() => setEditing(false)} onSaved={() => { setEditing(false); setSaved(true); reload(); }} />}
 
       <div className="two-col">
         <div className="card">
-          <h3>Details</h3>
-          <Field label="Email">{c.email}</Field>
-          <Field label="Phone">{c.phone}</Field>
-          <Field label="Date of birth">{c.dateOfBirth && String(c.dateOfBirth).slice(0, 10)}</Field>
-          <Field label="Address">{c.address}</Field>
-          {c.sheetSource && <Field label="Sheet source">{`${c.sheetSource.tab || ""} · row ${c.sheetSource.rowNumber || "?"} · Job ${c.sheetSource.jobId || "—"}`}</Field>}
-          <Field label="Location">{loc}</Field>
-          <Field label="LinkedIn">{link(c.linkedin)}</Field>
-          <Field label="GitHub">{link(c.github)}</Field>
-          <Field label="Twitter / X">{link(c.twitter)}</Field>
-          <Field label="Instagram">{link(c.instagram)}</Field>
-          <Field label="Facebook">{link(c.facebook)}</Field>
-          <Field label="Website">{link(c.website)}</Field>
+          <h3>Personal details</h3>
+          <Field icon="mail" label="Email">{c.email}</Field>
+          <Field icon="phone" label="Phone">{c.phone}</Field>
+          <Field icon="calendar" label="Date of birth">{c.dateOfBirth && fmtDay(c.dateOfBirth)}</Field>
+          <Field icon="pin" label="Address">{c.address}</Field>
+          <Field icon="globe" label="Location">{loc}</Field>
+          {c.sheetSource && <Field icon="sheet" label="Sheet source">{`${c.sheetSource.tab || ""} · row ${c.sheetSource.rowNumber || "?"} · Job ${c.sheetSource.jobId || "—"}`}</Field>}
         </div>
         <div>
           <div className="card">
             <h3>Experience</h3>
-            {c.experience?.length ? c.experience.map((x, i) => (
-              <div className="item" key={i}><b>{x.jobTitle || "—"}</b> · {x.company}
-                <div className="muted">{year(x.startDate)} – {x.endDate ? year(x.endDate) : "Present"}</div></div>
-            )) : <p className="muted">None added.</p>}
+            {c.experience?.length ? (
+              <div className="timeline">
+                {c.experience.map((x, i) => (
+                  <div className="item" key={i}>
+                    <span className="dot"><Icon name="briefcase" size={16} /></span>
+                    <div><b>{x.jobTitle || "—"}</b>{x.company && <> · {x.company}</>}
+                      <div className="muted small">{year(x.startDate)} – {x.endDate ? year(x.endDate) : "Present"}</div></div>
+                  </div>
+                ))}
+              </div>
+            ) : <p className="muted">No experience added.</p>}
           </div>
           <div className="card">
             <h3>Education</h3>
-            {c.education?.length ? c.education.map((x, i) => (
-              <div className="item" key={i}><b>{x.institution}</b>
-                <div className="muted">{[x.degree, x.fieldOfStudy].filter(Boolean).join(", ")} {x.startYear || x.endYear ? `(${x.startYear || "…"}–${x.endYear || "…"})` : ""}</div></div>
-            )) : <p className="muted">None added.</p>}
+            {c.education?.length ? (
+              <div className="timeline">
+                {c.education.map((x, i) => (
+                  <div className="item" key={i}>
+                    <span className="dot"><Icon name="graduation" size={16} /></span>
+                    <div><b>{x.institution || "—"}</b>
+                      <div className="muted small">{[x.degree, x.fieldOfStudy].filter(Boolean).join(", ")} {x.startYear || x.endYear ? `(${x.startYear || "…"}–${x.endYear || "…"})` : ""}</div></div>
+                  </div>
+                ))}
+              </div>
+            ) : <p className="muted">No education added.</p>}
           </div>
         </div>
       </div>
 
-      <div className="card">
-        <h3>Verification runs</h3>
-        <table>
-          <thead><tr><th>Started</th><th>Status</th><th>Result</th><th /></tr></thead>
-          <tbody>
-            {runs.map((r) => (
-              <tr key={r._id}>
-                <td>{fmtDate(r.startedAt || r.createdAt)}</td>
-                <td><Badge value={r.status} /></td><td><Badge value={r.finalResult} /></td>
-                <td className="right"><Link className="btn small" to={`/runs/${r._id}`}>Open</Link></td>
-              </tr>
-            ))}
-            {runs.length === 0 && <tr><td colSpan="4" className="muted">No runs yet.</td></tr>}
-          </tbody>
-        </table>
+      <div className="card flush">
+        <div className="card-head"><h3><Icon name="shield" size={17} />Verification runs</h3></div>
+        {runs.length === 0 ? (
+          <Empty icon="shield" title="Not verified yet" action={<button className="btn small primary" onClick={start} disabled={starting}>Start BGV</button>}>
+            Start a verification to search for this person's public profiles.
+          </Empty>
+        ) : (
+          <div className="table-wrap">
+            <table>
+              <thead><tr><th>Started</th><th>Status</th><th>Result</th><th /></tr></thead>
+              <tbody>
+                {runs.map((r) => (
+                  <tr key={r._id}>
+                    <td>{fmtDate(r.startedAt || r.createdAt)}</td>
+                    <td><Badge value={r.status} /></td>
+                    <td>{r.finalResult ? <Badge value={r.finalResult} /> : <span className="muted">—</span>}</td>
+                    <td className="actions-cell"><Link className="btn small" to={`/runs/${r._id}`}>Open<Icon name="arrowRight" size={14} /></Link></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </>
   );

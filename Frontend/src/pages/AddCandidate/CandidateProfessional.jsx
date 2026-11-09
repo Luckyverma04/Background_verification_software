@@ -20,7 +20,7 @@ export default function CandidateProfessional({ data, setData }) {
 
       <div className="subhead">
         <h3>Work history</h3>
-        <button type="button" className="btn small" onClick={add}>+ Add experience</button>
+        <button type="button" className="btn small" onClick={add}>＋ Add experience</button>
       </div>
       {data.experience.length === 0 && <p className="muted">No past experience added (optional).</p>}
       {data.experience.map((x, i) => (
