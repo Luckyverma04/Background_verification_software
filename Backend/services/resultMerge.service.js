@@ -288,6 +288,11 @@ const isValidCompany = (value) => {
     return false;
   }
 
+  // "of working in the IT industry", "at the moment": not a name
+  if (!/^[A-Z0-9@]/.test(cleaned)) {
+    return false;
+  }
+
   const invalidPhrases = [
     "bootcamp",
     "software developer",
@@ -394,9 +399,9 @@ const extractCompany = (
       .trim();
 
     const patterns = [
-      /(?:works?\s+at|working\s+at|currently\s+at|employed\s+at)\s+([A-Z][A-Za-z0-9&.,'()\- ]{2,100})(?=$|[.;|,\n])/i,
+      /(?:works?\s+at|working\s+at|currently\s+at|employed\s+at)\s+([A-Z][A-Za-z0-9&.'()\- ]{1,100}?)(?=\s*(?:$|[;|,\n\u00b7\u2022]|\.\s|\.$|\s[-\u2013\u2014]\s|\s(?:in|since|from|as)\s))/i,
 
-      /(?:developer|engineer|designer|manager|analyst|consultant|architect|scientist|specialist|director|founder|co-founder|executive|officer|intern|lead)\s+at\s+([A-Z][A-Za-z0-9&.,'()\- ]{2,100})(?=$|[.;|,\n])/i,
+      /(?:developer|engineer|designer|manager|analyst|consultant|architect|scientist|specialist|director|founder|co-founder|executive|officer|intern|lead|sde|swe)\s+(?:at|@)\s*([A-Z][A-Za-z0-9&.'()\- ]{1,100}?)(?=\s*(?:$|[;|,\n\u00b7\u2022]|\.\s|\.$|\s[-\u2013\u2014]\s|\s(?:in|since|from|as)\s))/i,
 
       /(?:company|organization|organisation)\s*[:\-]\s*([^.;|,\n]+)/i,
 
@@ -413,9 +418,9 @@ const extractCompany = (
 
     if (platform === "LINKEDIN") {
       const linkedinPatterns = [
-        /\bat\s+([A-Z][A-Za-z0-9&.,'()\- ]{2,100})(?=$|[.;|,\n])/i,
+        /\bat\s+([A-Z][A-Za-z0-9&.'()\- ]{1,100}?)(?=\s*(?:$|[;|,\n\u00b7\u2022]|\.\s|\.$|\s[-\u2013\u2014]\s))/i,
 
-        /\bof\s+([A-Z][A-Za-z0-9&.,'()\- ]{2,100})(?=$|[.;|,\n])/i,
+        /\bof\s+([A-Z][A-Za-z0-9&.'()\- ]{1,100}?)(?=\s*(?:$|[;|,\n\u00b7\u2022]|\.\s|\.$|\s[-\u2013\u2014]\s))/i,
       ];
 
       for (const pattern of linkedinPatterns) {
@@ -891,6 +896,10 @@ const parseLocation = (locationText) => {
     return null;
   }
 
+  for (let i = 0; i < parts.length; i++) {
+    parts[i] = parts[i].replace(/[.\s]+$/, "");
+  }
+
   if (parts.length === 1) {
     return {
       city: parts[0],
@@ -930,9 +939,9 @@ const extractLocation = (text) => {
   // ----------------------------------------------------
 
   const explicitPatterns = [
-    /(?:location)\s*[:\-]\s*([A-Z][A-Za-z .'-]{1,50}(?:,\s*[A-Z][A-Za-z .'-]{1,50}){0,2})/i,
+    /(?:location)\s*[:\-]\s*([A-Z][A-Za-z'-]+(?:\s+[A-Za-z][A-Za-z'-]+){0,3}(?:,\s*[A-Z][A-Za-z'-]+(?:\s+[A-Za-z][A-Za-z'-]+){0,3}){0,2})/i,
 
-    /(?:based\s+in|located\s+in|lives?\s+in)\s+([A-Z][A-Za-z .'-]{1,50}(?:,\s*[A-Z][A-Za-z .'-]{1,50}){0,2})/i,
+    /(?:based\s+in|located\s+in|lives?\s+in)\s+([A-Z][A-Za-z'-]+(?:\s+[A-Za-z][A-Za-z'-]+){0,3}(?:,\s*[A-Z][A-Za-z'-]+(?:\s+[A-Za-z][A-Za-z'-]+){0,3}){0,2})/,
   ];
 
   for (const pattern of explicitPatterns) {
@@ -956,7 +965,7 @@ const extractLocation = (text) => {
   // ----------------------------------------------------
 
   const indianPattern =
-    /\b([A-Z][A-Za-z .'-]{2,40}),\s*(Madhya Pradesh|Maharashtra|Delhi|Karnataka|Rajasthan|Gujarat|Uttar Pradesh|Haryana|Punjab|Tamil Nadu|Telangana|West Bengal|Kerala|Bihar|Odisha|Goa)(?:,\s*(India))?\b/i;
+    /\b([A-Z][A-Za-z'-]+(?:\s+[A-Z][A-Za-z'-]+){0,2}),\s*(Madhya Pradesh|Maharashtra|Delhi|NCT of Delhi|Karnataka|Rajasthan|Gujarat|Uttar Pradesh|Haryana|Punjab|Tamil Nadu|Telangana|West Bengal|Kerala|Bihar|Odisha|Goa|Andhra Pradesh|Assam|Jharkhand|Chhattisgarh|Uttarakhand|Himachal Pradesh|Jammu and Kashmir|Chandigarh|Puducherry|Tripura|Meghalaya|Manipur|Nagaland|Mizoram|Arunachal Pradesh|Sikkim)(?:,\s*(India))?\b/;
 
   const indianMatch =
     normalized.match(indianPattern);
@@ -980,7 +989,7 @@ const extractLocation = (text) => {
   // ----------------------------------------------------
 
   const countryPattern =
-    /\b([A-Z][A-Za-z .'-]{2,40}),\s*(India|USA|US|UK|Canada|Australia)\b/i;
+    /\b([A-Z][A-Za-z'-]+(?:\s+[A-Z][A-Za-z'-]+){0,2}),\s*(India|USA|US|UK|Canada|Australia|United States|United Kingdom|United Arab Emirates|UAE|Singapore|Germany)\b/;
 
   const countryMatch =
     normalized.match(countryPattern);
@@ -1010,27 +1019,34 @@ const extractEducation = (text) => {
 
   const education = [];
 
-  const patterns = [
-    /(?:studied\s+at|studied\s+in|graduated\s+from|education\s*[:\-])\s*([^.;|\n]+)/i,
+  const add = (value) => {
+    const institution = cleanText(String(value || "").replace(/[\s.,;:]+$/, ""));
+    if (!institution || institution.length < 3 || institution.length > 100) return;
+    if (education.some((e) => e.institution.toLowerCase() === institution.toLowerCase())) return;
+    education.push({ institution, degree: null, fieldOfStudy: null });
+  };
 
-    /(?:university|college|institute)\s+(?:of\s+)?([A-Za-z0-9&.,'()\- ]{3,100})/i,
-  ];
+  // "Education: X" / "studied at X" -- up to the next separator
+  const labelled = text.match(
+    /(?:studied\s+at|studied\s+in|graduated\s+from|alumni\s+of|education\s*[:\-])\s*([^;|\n\u00b7\u2022]+?)(?=\s*(?:$|[;|\n\u00b7\u2022]|\.\s|\.$))/i
+  );
+  if (labelled?.[1]) add(labelled[1]);
 
-  for (const pattern of patterns) {
-    const match = text.match(pattern);
+  // A full institution name: capitalised words around University / College /
+  // Institute, e.g. "Indian Institute of Technology, Indore", "Delhi University".
+  if (!education.length) {
+    const W = "[A-Z][A-Za-z&'-]*";
+    const re = new RegExp(
+      `\\b((?:${W}\\s+(?:(?:of|and|for|&)\\s+)?){0,5}(?:University|College|Institute|Academy)(?:\\s+(?:of|and|for|&)\\s+${W}(?:\\s+${W}){0,3})?(?:,\\s*[A-Z][a-z]+(?=$|[\\s.;|\u00b7\u2022]))?)`
+    );
+    const m = text.match(re);
+    if (m?.[1]) add(m[1]);
+  }
 
-    if (match?.[1]) {
-      const institution =
-        cleanText(match[1]);
-
-      if (institution) {
-        education.push({
-          institution,
-          degree: null,
-          fieldOfStudy: null,
-        });
-      }
-    }
+  // Common abbreviations: IIT Indore, NIT Trichy, IIIT Hyderabad, BITS Pilani
+  if (!education.length) {
+    const m = text.match(/\b((?:IIT|IIIT|NIT|BITS|IIM)\s+[A-Z][a-z]+)\b/);
+    if (m?.[1]) add(m[1]);
   }
 
   return education;
@@ -1308,21 +1324,58 @@ const trimEdgePunctuation = (value) => {
   return out || null;
 };
 
+// "Bhopal, Madhya Pradesh, India", "Greater Mumbai Area", "Pune" (1-4 words,
+// no digits) -- the shape LinkedIn uses for the location part of a title.
+const INDIA_STATES =
+  /\b(madhya pradesh|maharashtra|delhi|karnataka|rajasthan|gujarat|uttar pradesh|haryana|punjab|tamil nadu|telangana|west bengal|kerala|bihar|odisha|goa|andhra pradesh|assam|jharkhand|chhattisgarh|uttarakhand|himachal pradesh|jammu and kashmir|chandigarh)\b/i;
+const looksLikeLocation = (value) => {
+  const v = String(value || "").trim();
+  if (!v || /\d/.test(v) || TITLE_WORDS.test(v)) return false;
+  if (/\b(area|region|metropolitan)\b/i.test(v)) return true;
+  const parts = v.split(",").map((x) => x.trim()).filter(Boolean);
+  if (parts.length < 2 || parts.length > 3) return false;
+  if (!parts.every((x) => /^[A-Z][A-Za-z'.-]*(?:\s+[A-Za-z][A-Za-z'.-]*){0,3}$/.test(x))) return false;
+  return INDIA_STATES.test(v) || /\b(india|usa|united states|united kingdom|uk|canada|australia|uae|singapore|germany)\b/i.test(v);
+};
+
+const COUNTRY_NAMES =
+  /^(india|usa|us|united states|united states of america|uk|united kingdom|canada|australia|uae|united arab emirates|singapore|germany|france|netherlands|ireland|new zealand|japan|china|nepal|bangladesh|sri lanka|pakistan|south africa|saudi arabia|qatar)$/i;
+
+// "City, Country" puts the country in `country`, not in `state`.
+const parseLocationSmart = (text) => {
+  const loc = parseLocation(text);
+  if (!loc) return loc;
+  if (loc.state && !loc.country && COUNTRY_NAMES.test(loc.state)) {
+    return { city: loc.city, state: null, country: loc.state };
+  }
+  if (loc.city && !loc.state && !loc.country && COUNTRY_NAMES.test(loc.city)) {
+    return { city: null, state: null, country: loc.city };
+  }
+  return loc;
+};
+
 const parseTitleStructure = (title, platform) => {
-  const empty = { name: null, jobTitle: null, company: null };
+  const empty = { name: null, jobTitle: null, company: null, location: null };
   if (!title || platform !== "LINKEDIN") return empty;
 
-  const body = String(title).replace(/\s*[|\u2013\u2014-]\s*LinkedIn\s*$/i, "").trim();
+  const body = String(title)
+    .replace(/\s*[|\u2013\u2014-]\s*LinkedIn\s*$/i, "")
+    .replace(/\s*\|\s*(?:Professional Profile|Profile)\s*$/i, "")
+    .trim();
   const parts = body.split(/\s+[-\u2013\u2014]\s+/).map((p) => p.trim()).filter(Boolean);
   if (parts.length < 2) return empty;
 
-  const out = { name: parts[0], jobTitle: null, company: null };
+  const out = { name: parts[0], jobTitle: null, company: null, location: null };
 
-  if (parts.length >= 3) {
-    out.jobTitle = parts[1];
-    out.company = parts.slice(2).join(" - ");
-  } else {
-    const second = parts[1];
+  // "Name - City, State, Country" (location instead of title / company)
+  const rest = parts.slice(1);
+  if (looksLikeLocation(rest[rest.length - 1])) out.location = rest.pop();
+
+  if (rest.length >= 2) {
+    out.jobTitle = rest[0];
+    out.company = rest.slice(1).join(" - ");
+  } else if (rest.length === 1) {
+    const second = rest[0];
     const at = second.match(/^(.+?)\s+at\s+(.+)$/i);
     if (at) {
       out.jobTitle = at[1];
@@ -1343,14 +1396,78 @@ const parseTitleStructure = (title, platform) => {
 
 const LOCATION_NOISE = /^(?:linkedin|github|facebook|instagram|twitter|x|profile|view|\|)\s+/i;
 
+// The person's display name from the page title, per platform:
+//   GitHub     "user (Full Name) · GitHub"            -> Full Name ("user · GitHub" -> none)
+//   Instagram  "Full Name (@user) • Instagram ..."   -> Full Name
+//   X          "Full Name (@user) / X", "... on X: ..." -> Full Name
+//   LinkedIn   "Full Name on LinkedIn: ..." (posts)  -> Full Name
+//   any        "Full Name | Facebook", "Full Name - YouTube"
+const PLATFORM_TAIL =
+  /\s*(?:[|\u00b7\u2022/]|\s[-\u2013\u2014])\s*(?:LinkedIn|Facebook|Instagram(?:\s+photos.*)?|GitHub|X|Twitter|YouTube|Medium|Kaggle|Behance|Dribbble|GitLab|Stack Overflow|Quora|Reddit|LeetCode|HackerRank|Threads|Pinterest)\b.*$/i;
+
+const nameFromTitle = (title, platform) => {
+  const t = cleanText(title);
+  if (!t) return undefined;
+  let m;
+  if (platform === "GITHUB") {
+    if ((m = t.match(/^\S+\s+\(([^()@]{2,80})\)\s*(?:[\u00b7\u2022|-]\s*GitHub)?/i))) return m[1].trim();
+    if (/^[\w.-]+\s*[\u00b7\u2022|-]\s*GitHub/i.test(t)) return null; // only a username
+    if (/^GitHub\s*-\s*/i.test(t)) return null; // a repository page
+  }
+  if ((m = t.match(/^(.{2,80}?)\s*\(@[\w.]{1,40}\)/))) return m[1].trim();
+  if ((m = t.match(/^(.{2,80}?)\s+on\s+(?:LinkedIn|X|Twitter|Instagram|Facebook)\s*:/i))) return m[1].trim();
+  if (/^@[\w.]+\s*[\u00b7\u2022|]/.test(t)) return null; // only a handle
+  const stripped = t.replace(PLATFORM_TAIL, "").trim();
+  if (stripped && stripped !== t) return stripped;
+  return undefined; // no opinion
+};
+
+// LinkedIn snippets are "·"-separated and often labelled:
+//   "Senior Software Engineer at TCS · Experience: TCS · Education: IIT Indore · Location: Bhopal · 500+ connections"
+//   "Bhopal, Madhya Pradesh, India · Software Engineer · TCS"
+const parseLinkedInSnippet = (snippet) => {
+  const out = {};
+  const segs = String(snippet || "").split(/\s*[\u00b7\u2022]\s*/).map((x) => x.trim()).filter(Boolean);
+  segs.forEach((seg, i) => {
+    let m;
+    if ((m = seg.match(/^Experience\s*:\s*(.+)$/i))) out.company = trimEdgePunctuation(m[1]);
+    else if ((m = seg.match(/^Education\s*:\s*(.+)$/i))) out.education = trimEdgePunctuation(m[1]);
+    else if ((m = seg.match(/^Location\s*:\s*(.+)$/i))) out.location = trimEdgePunctuation(m[1]);
+    else if (i === 0 && looksLikeLocation(seg)) out.location = seg;
+  });
+  // "Bhopal, Madhya Pradesh, India · Software Engineer · TCS. Experienced ..."
+  if (out.location && !out.company && segs.length >= 3 && TITLE_WORDS.test(segs[1]) && !/:/.test(segs[2])) {
+    const company = trimEdgePunctuation(segs[2].split(/\.\s/)[0]);
+    if (company && /^[A-Z0-9]/.test(company) && company.split(/\s+/).length <= 6) {
+      out.jobTitle = trimEdgePunctuation(segs[1]);
+      out.company = company;
+    }
+  }
+  return out;
+};
+
 const refineFields = (obj, result) => {
   if (!obj) return obj;
 
   const ts = parseTitleStructure(result?.title, obj.platform);
 
-  if (ts.name && ts.name.split(/\s+/).length <= 5) obj.name = ts.name;
+  if (ts.name && ts.name.split(/\s+/).length <= 5) {
+    obj.name = ts.name;
+  } else {
+    const n = nameFromTitle(result?.title, obj.platform);
+    if (n !== undefined) obj.name = n && n.split(/\s+/).length <= 5 ? cleanName(n) : null;
+  }
   if (ts.company) obj.company = ts.company;
   if (ts.jobTitle) obj.jobTitle = ts.jobTitle;
+  if (ts.location) obj.location = parseLocationSmart(ts.location);
+
+  if (obj.platform === "LINKEDIN") {
+    const sn = parseLinkedInSnippet(result?.snippet || result?.content);
+    if (sn.company && !ts.company) obj.company = sn.company;
+    if (sn.jobTitle && !ts.jobTitle) obj.jobTitle = sn.jobTitle;
+    if (sn.education) obj.education = [{ institution: sn.education, degree: null, fieldOfStudy: null }];
+    if (sn.location && !ts.location) obj.location = parseLocationSmart(sn.location);
+  }
 
   obj.company = trimEdgePunctuation(obj.company);
   obj.jobTitle = trimEdgePunctuation(obj.jobTitle);
@@ -1359,6 +1476,11 @@ const refineFields = (obj, result) => {
     let city = obj.location.city;
     while (LOCATION_NOISE.test(city)) city = city.replace(LOCATION_NOISE, "");
     obj.location = { ...obj.location, city: trimEdgePunctuation(city) };
+  }
+  if (obj.location) {
+    for (const k of ["state", "country"]) {
+      if (obj.location[k]) obj.location[k] = trimEdgePunctuation(obj.location[k]);
+    }
   }
 
   return obj;
@@ -1697,6 +1819,9 @@ const mergeSearchResults = (
 // ======================================================
 
 module.exports = {
+  nameFromTitle,
+  parseLinkedInSnippet,
+  parseTitleStructure,
   normalizeUrl,
 
   detectPlatform,

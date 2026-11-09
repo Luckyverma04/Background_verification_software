@@ -25,7 +25,8 @@ const renormalizeExistingSearchResults = async ({
     try {
       const rawData = searchResult.rawData;
 
-      if (!rawData) {
+      // Profiles a human added or confirmed are never re-parsed.
+      if (!rawData || ["MANUAL", "KNOWLEDGE_BASE"].includes(searchResult.source)) {
         skipped++;
         continue;
       }
@@ -154,8 +155,18 @@ const renormalizeExistingSearchResults = async ({
       }
 
       // ------------------------------------------
-      // Update existing MongoDB document
+      // Update existing MongoDB document. A field that enrichment took
+      // from a structured source (GitHub API, profile page) is better than
+      // anything in a search snippet and is kept.
       // ------------------------------------------
+      const fieldSources = searchResult.enrichment?.fieldSources || {};
+      const structured = (field) => {
+        const fs = fieldSources[field];
+        return Boolean(fs && fs.source && fs.source !== "SEARCH_SNIPPET");
+      };
+      for (const field of ["name", "headline", "company", "jobTitle", "location", "education"]) {
+        if (structured(field)) normalized[field] = searchResult[field];
+      }
 
       searchResult.platform =
         normalized.platform ||

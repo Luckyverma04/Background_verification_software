@@ -934,11 +934,26 @@ const PENALTY_PER_POINT = 8;
 const PENALTY_MAX = 24;
 const EVIDENCE_CAPS = [40, 70, 90, 100]; // independent corroborators 0,1,2,3+
 
-const MATCH_ENGINE_VERSION = 4;
+const MATCH_ENGINE_VERSION = 5;
 
 const classifyPage = (searchResult) => {
   const noisy = isNoisyPage(searchResult);
   return { noisy, profileUrlShape: isProfileLikeUrl(searchResult) };
+};
+
+// A search result's "headline" is often just the page title
+// ("Priya Verma | Facebook", "Priya Verma (@pv) • Instagram"). That is not a
+// job title and must not be compared as one (it produced false "different
+// title" conflicts on every social profile).
+const PAGE_TITLE_WORDS = /\b(linkedin|facebook|instagram|github|twitter|youtube|medium|kaggle|behance|dribbble|gitlab|quora|reddit|profile|photos|videos|posts)\b|\(@|\s\/\s*x$/i;
+const headlineAsTitle = (searchResult) => {
+  const h = String(searchResult?.headline || "").trim();
+  if (!h) return null;
+  if (h === searchResult.title || h === searchResult.rawData?.title) return null;
+  if (PAGE_TITLE_WORDS.test(h)) return null;
+  const name = String(searchResult.name || "").trim().toLowerCase();
+  if (name && h.toLowerCase().includes(name)) return null;
+  return h;
 };
 
 const calculateCandidateMatch = (candidate, searchResult) => {
@@ -971,7 +986,7 @@ const calculateCandidateMatch = (candidate, searchResult) => {
   // ---------- components ----------
   const name = signals.compareNames(candidate.fullName, searchResult.name);
   const company = signals.compareCompany(candidate, searchResult.company, text);
-  const title = signals.compareTitle(candidate, searchResult.jobTitle || searchResult.headline);
+  const title = signals.compareTitle(candidate, searchResult.jobTitle || headlineAsTitle(searchResult));
   const location = signals.compareLocation(candidate.location, searchResult.location, text);
   const education = signals.compareEducation(candidate.education, searchResult.education, text);
 
@@ -1110,12 +1125,34 @@ const calculateCandidateMatch = (candidate, searchResult) => {
   if (directUrlMatch) similarityScore = 100;
   similarityScore = Math.round(similarityScore);
 
+  // ---------- coverage: how much of what COULD be compared agrees ----------
+  // A candidate with only name + company + city can never reach 80 points
+  // (40 + 25 + 12 = 77) even when everything matches. Coverage measures the
+  // score against the maximum that the available data allows.
+  const comparableFields = [["company", company], ["jobTitle", title], ["location", location], ["education", education]]
+    .filter(([, comp]) => comp.score !== null && comp.score !== undefined)
+    .map(([field]) => field);
+  const maxAchievable = WEIGHTS.name + comparableFields.reduce((sum, f) => sum + WEIGHTS[f], 0);
+  const coverage = nameKnown ? Math.max(0, Math.min(1, raw / maxAchievable)) : 0;
+
   // ---------- status ----------
   const hardCount = contradictions.filter((c) => c.severity === "HARD").length;
   const idContradiction = contradictions
     .filter((c) => c.field !== "pageType")
     .reduce((s, c) => s + c.weight, 0);
   const nameOk = name.state === "MATCH" || name.state === "PARTIAL";
+  const currentEmployerConfirmed = company.state === "MATCH" && company.employer === "CURRENT" && company.source === "FIELD";
+  const cityConfirmed = location.state === "MATCH" && location.level === "CITY";
+  // Everything that can be compared agrees, including the current employer
+  // AND the city (name + employer + city is the minimum for STRONG this way).
+  const completeAgreement =
+    name.state === "MATCH" &&
+    currentEmployerConfirmed &&
+    cityConfirmed &&
+    independentCount >= 2 &&
+    idContradiction === 0 &&
+    coverage >= 0.9 &&
+    similarityScore >= th.possibleMin;
   const reasons = [];
   let matchStatus;
 
@@ -1143,6 +1180,9 @@ const calculateCandidateMatch = (candidate, searchResult) => {
   ) {
     matchStatus = "STRONG";
     reasons.push("NAME_PLUS_MULTIPLE_INDEPENDENT_EVIDENCE");
+  } else if (completeAgreement && hardCount === 0) {
+    matchStatus = "STRONG";
+    reasons.push("NAME_PLUS_ALL_AVAILABLE_EVIDENCE");
   } else if (nameOk && independentCount >= 1 && similarityScore >= th.possibleMin && name.score >= 70) {
     matchStatus = "POSSIBLE";
     reasons.push("NAME_PLUS_INDEPENDENT_EVIDENCE");
@@ -1175,6 +1215,9 @@ const calculateCandidateMatch = (candidate, searchResult) => {
       score: similarityScore,
       rawScore: Math.round(raw),
       evidenceCap,
+      coverage: Number(coverage.toFixed(2)),
+      maxAchievable,
+      comparableFields,
       independentEvidence: independent.map((c) => c.field),
       independentCount,
       nameContribution: Number(nameBase.toFixed(1)),
@@ -1218,7 +1261,7 @@ const calculateCandidateMatch = (candidate, searchResult) => {
     if (domainRelevance.score === 0) parts.push("Job domain looks different (ranking only; not an identity conflict).");
     if (page.noisy) parts.push("Result is not a personal profile page.");
   }
-  parts.push(`Score ${similarityScore}/100 (cap ${evidenceCap}); status ${matchStatus} [${reasons.join(", ")}].`);
+  parts.push(`Score ${similarityScore}/100 (cap ${evidenceCap}); ${Math.round(raw)} of ${maxAchievable} possible with the data available; status ${matchStatus} [${reasons.join(", ")}].`);
   if (conflictingSignals.length) {
     parts.push(
       `Conflicts: ${conflictingSignals.map((c) => `${c.field}(${c.severity})`).join(", ")}.`

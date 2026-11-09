@@ -74,6 +74,12 @@ export const createRun = (candidateId) =>
 // search + match can take a while (external search APIs)
 export const searchRun = (id) =>
   api.post(`/bgv-runs/${id}/search`, {}, { timeout: 5 * 60 * 1000 }).then((r) => r.data.data);
+// Re-parse stored results with the current parser and re-score them.
+// No new web search, no provider cost; reviewer decisions are kept.
+export const recheckRun = async (id) => {
+  await api.post(`/bgv-runs/${id}/renormalize`, {}, { timeout: 5 * 60 * 1000 });
+  return api.post(`/bgv-runs/${id}/match`, {}, { timeout: 5 * 60 * 1000 }).then((r) => r.data.data);
+};
 export const matchRun = (id) =>
   api.post(`/bgv-runs/${id}/match`, {}, { timeout: 5 * 60 * 1000 }).then((r) => r.data.data);
 

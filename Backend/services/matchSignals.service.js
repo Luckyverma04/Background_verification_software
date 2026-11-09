@@ -226,11 +226,23 @@ const validateCompany = (value) => {
   return { valid: true, value: v.replace(/\s+/g, " ") };
 };
 
+// "TCS" <-> "Tata Consultancy Services", "IBM" <-> "International Business
+// Machines". Only a single-token name of 3+ letters that equals the initials
+// of every word of the other name counts (stop words ignored).
+const ACRONYM_STOP = new Set(["and", "of", "the", "for", "in"]);
+const isAcronymOf = (short, long) => {
+  if (short.length !== 1 || long.length < 2) return false;
+  const words = long.filter((t) => !ACRONYM_STOP.has(t));
+  const initials = words.map((t) => t[0]).join("");
+  return short[0].length >= 3 && initials.length >= 3 && short[0] === initials;
+};
+
 const compareOneCompany = (known, found) => {
   const a = companyTokens(known);
   const b = companyTokens(found);
   if (!a.length || !b.length) return 0;
   if (a.join(" ") === b.join(" ")) return 100;
+  if (isAcronymOf(a, b) || isAcronymOf(b, a)) return 90;
   const da = distinctive(a);
   const db = distinctive(b);
   if (!da.length || !db.length) return 0;
@@ -294,10 +306,17 @@ const compareCompany = (candidate, resultCompany, text) => {
 // ------------------------------------------------------------
 // TITLE
 // ------------------------------------------------------------
+// Words that name the same role. "Software Developer" and "Software
+// Engineer" are the same job; "Programmer" too.
+const TITLE_SYNONYM = { developer: "engineer", programmer: "engineer", coder: "engineer" };
+
 const titleTokens = (v) =>
   toks(v)
     .flatMap((t) => (TITLE_ABBR[t] ? TITLE_ABBR[t].split(" ") : [t]))
-    .filter((t) => !["of", "and", "the", "at", "in", "for"].includes(t));
+    .map((t) => TITLE_SYNONYM[t] || t)
+    .filter((t) => !["of", "and", "the", "at", "in", "for"].includes(t))
+    // "software development engineer" (SDE) is a software engineer
+    .filter((t, i, all) => !(t === "development" && all[i + 1] === "engineer"));
 
 const validateTitle = (value) => {
   const v = String(value ?? "").trim();
@@ -543,6 +562,7 @@ const dedupeQueries = (queries, { threshold = 0.85 } = {}) => {
 };
 
 module.exports = {
+  isAcronymOf,
   norm, toks, looksLikeFragment, nameTokens,
   compareNames, analyzeUsername, isJunkUsername,
   validateCompany, compareCompany, knownCompanies,
