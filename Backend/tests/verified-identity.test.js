@@ -350,8 +350,8 @@ test("V16. validation: bad URL, unsupported / mismatching platform, non-profile 
 test("V17. Add profile as VERIFIED needs a named reviewer, then persists in the same registry with reviewer + time + notes", async () => {
   const run = S.manualRun;
   const url = "https://github.com/amit-sharma-manual";
-  const noName = await ctx.call("POST", `/bgv-runs/${run._id}/profiles`, { profileUrl: url, mode: "VERIFIED" });
-  assert.equal(noName.status, 400);
+  const noName = await ctx.call("POST", `/bgv-runs/${run._id}/profiles`, { profileUrl: url, mode: "VERIFIED" }, { "X-No-Auth": "1" });
+  assert.equal(noName.status, 401, "anonymous requests are refused before anything is saved");
   assert.equal(await ctx.models.SearchResult.countDocuments({ bgvRun: run._id, profileUrl: /amit-sharma-manual/ }), 0, "nothing saved when refused");
 
   const ok = await ctx.call("POST", `/bgv-runs/${run._id}/profiles`, { profileUrl: url, mode: "VERIFIED", notes: "Seen on his CV", evidenceSource: "CV page 2" }, { "X-Reviewer": "Verifier One" });

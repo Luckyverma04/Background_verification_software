@@ -343,7 +343,7 @@ const importRow = async ({ cfg, sheetId, tab, rowNumber, mapped, summary }) => {
 };
 
 // ---------------------------------------------------------------- listing (completeness is computed live)
-const labelOf = (req) => map.clean(req?.user?.name || req?.headers?.["x-reviewer"] || req?.body?.reviewerName) || "reviewer";
+const labelOf = (req) => map.clean(req?.user?.name || req?.user?.email) || "reviewer";
 
 const listItems = async ({ limit = 500 } = {}) => {
   const cfg = getConfig();
@@ -536,7 +536,7 @@ const workerLoop = async () => {
     const row = await SheetImportRow.findOneAndUpdate(
       { searchStatus: "QUEUED" },
       { $set: { searchStatus: "RUNNING", searchStartedAt: new Date(), searchError: undefined }, $inc: { attempts: 1 } },
-      { sort: { queuedAt: 1 }, new: true }
+      { sort: { queuedAt: 1 }, returnDocument: "after" }
     );
     if (!row) return;
     if (active.has(String(row._id))) continue;

@@ -1,8 +1,9 @@
 
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { createCandidate, errMsg } from "../../api/client";
-import { PageHeader } from "../../components/ui";
+import { createCandidate, errMsg, uploadCandidateImage } from "../../api/client";
+import Icon from "../../components/Icon";
+import { Notice, PageHeader } from "../../components/ui";
 
 import CandidateBasicInfo from "./CandidateBasicInfo";
 import CandidateProfessional from "./CandidateProfessional";
@@ -105,169 +106,62 @@ export default function AddCandidate() {
 
   const [step, setStep] = useState(0);
   const [data, setData] = useState(initial);
-
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  // Image upload state
+  // Photo: either a file from this computer or a public image URL
   const [imageFile, setImageFile] = useState(null);
-  const [imagePreview, setImagePreview] = useState("");
-
-  // Image URL state
   const [imageUrl, setImageUrl] = useState("");
+  const [imagePreview, setImagePreview] = useState("");
   const [uploadingImage, setUploadingImage] = useState(false);
 
   const last = step === STEPS.length - 1;
+  const canNext = step !== 0 || data.fullName.trim().length > 0;
+  const props = { data, setData };
 
-  const canNext =
-    step !== 0 || data.fullName.trim().length > 0;
-
-  const props = {
-    data,
-    setData,
-  };
-
-  // Upload image from PC
   const handleImageChange = (event) => {
     const file = event.target.files?.[0];
-
     if (!file) return;
-
-    if (!file.type.startsWith("image/")) {
-      setError("Please select a valid image.");
-      return;
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-      setError("Image size must be less than 5MB.");
-      return;
-    }
-
+    if (!file.type.startsWith("image/")) return setError("Please choose an image file (PNG or JPG).");
+    if (file.size > 5 * 1024 * 1024) return setError("The image must be smaller than 5 MB.");
     setError("");
     setImageFile(file);
     setImageUrl("");
-
-    const previewUrl = URL.createObjectURL(file);
-    setImagePreview(previewUrl);
+    setImagePreview(URL.createObjectURL(file));
   };
 
-  // Image URL change
   const handleImageUrlChange = (event) => {
     const value = event.target.value;
-
     setImageUrl(value);
-
-    if (value.trim()) {
-      setImageFile(null);
-      setImagePreview(value.trim());
-    } else {
-      setImagePreview("");
-    }
-
+    setImageFile(null);
+    setImagePreview(value.trim());
     setError("");
   };
 
-  // Upload PC image
-  const uploadImageFile = async () => {
-    if (!imageFile) return null;
+  const clearImage = () => { setImageFile(null); setImageUrl(""); setImagePreview(""); };
 
-    const formData = new FormData();
-    formData.append("image", imageFile);
-
-    const API_URL =
-      import.meta.env.VITE_API_URL ||
-      "http://localhost:5000/api";
-
-    const response = await fetch(
-      `${API_URL}/uploads/candidate-image`,
-      {
-        method: "POST",
-        body: formData,
-      }
-    );
-
-    const result = await response.json();
-
-    if (!response.ok || !result.success) {
-      throw new Error(
-        result.message || "Image upload failed."
-      );
-    }
-
-    return result.data;
-  };
-
-  // Upload image from URL
-  const uploadImageFromUrl = async () => {
-    if (!imageUrl.trim()) return null;
-
-    const API_URL =
-      import.meta.env.VITE_API_URL ||
-      "http://localhost:5000/api";
-
-    const response = await fetch(
-      `${API_URL}/uploads/candidate-image-url`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          imageUrl: imageUrl.trim(),
-        }),
-      }
-    );
-
-    const result = await response.json();
-
-    if (!response.ok || !result.success) {
-      throw new Error(
-        result.message || "Image URL upload failed."
-      );
-    }
-
-    return result.data;
-  };
-
-  // Submit candidate
   const submit = async () => {
     setSaving(true);
     setError("");
-
     try {
-      let imageData = null;
+      const payload = toPayload(data);
 
       if (imageFile) {
         setUploadingImage(true);
-        imageData = await uploadImageFile();
-      } else if (imageUrl.trim()) {
-        setUploadingImage(true);
-        imageData = await uploadImageFromUrl();
-      }
-
-      setUploadingImage(false);
-
-      const payload = toPayload(data);
-
-      if (imageData) {
+        const uploaded = await uploadCandidateImage(imageFile);
+        setUploadingImage(false);
         payload.source = "IMAGE";
-        payload.sourceImageUrl = imageData.url;
-        payload.sourceImagePublicId = imageData.publicId;
+        payload.sourceImageUrl = uploaded.url;
+        payload.sourceImagePublicId = uploaded.publicId;
+      } else if (imageUrl.trim()) {
+        payload.sourceImageUrl = imageUrl.trim();
       }
 
       const candidate = await createCandidate(payload);
-
       nav(`/candidates/${candidate._id}`);
     } catch (e) {
-      console.error("Create candidate error:", e);
-
       setUploadingImage(false);
-
-      setError(
-        errMsg(e) ||
-          e.message ||
-          "Could not create candidate."
-      );
+      setError(errMsg(e) || "Could not create the candidate.");
     } finally {
       setSaving(false);
     }
@@ -275,262 +169,63 @@ export default function AddCandidate() {
 
   return (
     <>
-      <PageHeader
-        title="Add candidate"
-        subtitle="Enter the details to be verified."
-      />
+      <PageHeader title="Add candidate" subtitle="Enter what you know. Only the full name is required; more details give better matches." />
 
       <div className="card">
         <ol className="steps">
           {STEPS.map((s, i) => (
-            <li
-              key={s}
-              className={
-                i === step
-                  ? "on"
-                  : i < step
-                  ? "done"
-                  : ""
-              }
-              onClick={() =>
-                (i <= step || canNext) && setStep(i)
-              }
-            >
-              <b>{i < step ? "✓" : i + 1}</b> {s}
+            <li key={s} className={i === step ? "on" : i < step ? "done" : ""} onClick={() => (i <= step || canNext) && setStep(i)}>
+              <b>{i < step ? <Icon name="check" size={15} strokeWidth={2.4} /> : i + 1}</b><span>{s}</span>
             </li>
           ))}
         </ol>
 
-        {/* Candidate image section */}
-        <div
-          style={{
-            marginBottom: "28px",
-            padding: "22px",
-            borderRadius: "16px",
-            border: "1px solid #dbe4ff",
-            background:
-              "linear-gradient(135deg, #f5f7ff 0%, #eef2ff 100%)",
-          }}
-        >
-          <div style={{ marginBottom: "16px" }}>
-            <h3
-              style={{
-                margin: 0,
-                fontSize: "18px",
-                fontWeight: 700,
-                color: "#1e2a5a",
-              }}
-            >
-              Candidate Image
-            </h3>
-
-            <p
-              style={{
-                margin: "5px 0 0",
-                color: "#667085",
-                fontSize: "14px",
-              }}
-            >
-              Upload from your computer or provide an image URL.
-            </p>
-          </div>
-
-          <div
-            style={{
-              padding: "16px",
-              background: "#ffffff",
-              borderRadius: "12px",
-              border: "1px solid #e0e7ff",
-              marginBottom: "14px",
-            }}
-          >
-            <label
-              style={{
-                display: "block",
-                fontWeight: 600,
-                color: "#344054",
-                marginBottom: "8px",
-              }}
-            >
-              📁 Upload from PC
-            </label>
-
-            <input
-              type="file"
-              accept="image/png,image/jpeg,image/jpg"
-              onChange={handleImageChange}
-              disabled={saving || uploadingImage}
-            />
-          </div>
-
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "12px",
-              margin: "12px 0",
-              color: "#98a2b3",
-              fontSize: "13px",
-            }}
-          >
-            <div
-              style={{
-                flex: 1,
-                height: "1px",
-                background: "#d0d5dd",
-              }}
-            />
-            OR
-            <div
-              style={{
-                flex: 1,
-                height: "1px",
-                background: "#d0d5dd",
-              }}
-            />
-          </div>
-
-          <div
-            style={{
-              padding: "16px",
-              background: "#ffffff",
-              borderRadius: "12px",
-              border: "1px solid #e0e7ff",
-            }}
-          >
-            <label
-              style={{
-                display: "block",
-                fontWeight: 600,
-                color: "#344054",
-                marginBottom: "8px",
-              }}
-            >
-              🔗 Image URL
-            </label>
-
-            <input
-              type="url"
-              value={imageUrl}
-              onChange={handleImageUrlChange}
-              placeholder="https://example.com/image.jpg"
-              disabled={saving || uploadingImage}
-              style={{
-                width: "100%",
-                boxSizing: "border-box",
-                padding: "11px 13px",
-                border: "1px solid #c7d2fe",
-                borderRadius: "8px",
-                outline: "none",
-                fontSize: "14px",
-              }}
-            />
-          </div>
-
-          {imagePreview && (
-            <div
-              style={{
-                marginTop: "18px",
-                padding: "14px",
-                background: "#ffffff",
-                borderRadius: "12px",
-                border: "1px solid #dbe4ff",
-              }}
-            >
-              <p
-                style={{
-                  margin: "0 0 10px",
-                  fontWeight: 600,
-                  color: "#344054",
-                }}
-              >
-                Preview
-              </p>
-
-              <img
-                src={imagePreview}
-                alt="Candidate preview"
-                style={{
-                  width: "150px",
-                  height: "150px",
-                  objectFit: "cover",
-                  borderRadius: "12px",
-                  border: "2px solid #6366f1",
-                  display: "block",
-                }}
-                onError={() => {
-                  setError("Could not load this image URL.");
-                  setImagePreview("");
-                }}
-              />
-
-              {imageFile && (
-                <p
-                  style={{
-                    margin: "8px 0 0",
-                    fontSize: "13px",
-                    color: "#667085",
-                  }}
-                >
-                  {imageFile.name}
-                </p>
+        {step === 0 && (
+          <div className="photo-box">
+            <div className={`photo-preview ${imagePreview ? "filled" : ""}`}>
+              {imagePreview ? (
+                <img src={imagePreview} alt="Candidate preview" referrerPolicy="no-referrer"
+                  onError={() => { setError("Could not load this image."); setImagePreview(""); }} />
+              ) : (
+                <div className="stack" style={{ alignItems: "center" }}><Icon name="user" size={30} />Photo (optional)</div>
               )}
             </div>
-          )}
-
-          {uploadingImage && (
-            <div
-              style={{
-                marginTop: "14px",
-                padding: "10px 12px",
-                borderRadius: "8px",
-                background: "#eef2ff",
-                color: "#4338ca",
-                fontSize: "14px",
-                fontWeight: 600,
-              }}
-            >
-              ⏳ Uploading image to Cloudinary...
+            <div>
+              <h3 style={{ marginBottom: 4 }}>Candidate photo</h3>
+              <p className="muted" style={{ margin: "0 0 12px" }}>Upload from this computer or paste a public image link.</p>
+              <label className="dropzone">
+                <Icon name="upload" />
+                <span className="grow">{imageFile ? imageFile.name : "Choose a PNG or JPG (max 5 MB)"}</span>
+                <input type="file" accept="image/png,image/jpeg" onChange={handleImageChange} disabled={saving} />
+              </label>
+              <div className="or">OR</div>
+              <div className="search" style={{ width: "100%" }}>
+                <Icon name="link" size={16} />
+                <input type="url" value={imageUrl} onChange={handleImageUrlChange} placeholder="https://example.com/photo.jpg" disabled={saving} aria-label="Image URL" />
+              </div>
+              {imagePreview && <button type="button" className="btn small ghost mt" onClick={clearImage}><Icon name="x" size={14} />Remove photo</button>}
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
-        {/* Form steps */}
         {step === 0 && <CandidateBasicInfo {...props} />}
         {step === 1 && <CandidateProfessional {...props} />}
         {step === 2 && <CandidateEducation {...props} />}
         {step === 3 && <CandidateSocialProfiles {...props} />}
 
-        {error && <div className="state error">{error}</div>}
+        {error && <div className="mt"><Notice tone="error">{error}</Notice></div>}
 
         <div className="actions">
-          <button
-            className="btn"
-            disabled={step === 0 || saving}
-            onClick={() => setStep(step - 1)}
-          >
-            Back
+          <button className="btn" disabled={step === 0 || saving} onClick={() => setStep(step - 1)}>
+            <Icon name="arrowLeft" size={15} />Back
           </button>
-
           {last ? (
-            <button
-              className="btn primary"
-              disabled={saving || !data.fullName.trim()}
-              onClick={submit}
-            >
-              {uploadingImage
-                ? "Uploading image..."
-                : saving
-                ? "Saving..."
-                : "Save candidate"}
+            <button className="btn primary" disabled={saving || !data.fullName.trim()} onClick={submit}>
+              <Icon name="check" size={16} />{uploadingImage ? "Uploading photo…" : saving ? "Saving…" : "Save candidate"}
             </button>
           ) : (
-            <button
-              className="btn primary"
-              disabled={!canNext || saving}
-              onClick={() => setStep(step + 1)}
-            >
-              Next
+            <button className="btn primary" disabled={!canNext || saving} onClick={() => setStep(step + 1)}>
+              Next<Icon name="arrowRight" size={15} />
             </button>
           )}
         </div>

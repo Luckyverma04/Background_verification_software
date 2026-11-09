@@ -109,7 +109,7 @@ const addProfileToRun = async (req, res) => {
     // ---- reviewer (explicit verification must be attributable)
     const reviewer = verifiedIdentities.reviewerFromRequest(req);
     if (mode === "VERIFIED" && !reviewer.label && !reviewer.id) {
-      return sendError(res, 400, "reviewerName is required to save a profile as verified");
+      return sendError(res, 400, "A named, logged-in reviewer is required to save a profile as verified");
     }
 
     const ids = extractProfileIdentifier(profileUrl, platform) || {};
@@ -324,7 +324,7 @@ const listVerifiedIdentities = async (req, res) => {
 };
 
 // ======================================================
-// POST /api/verified-identities/:id/revoke  { reason, reviewerName }
+// POST /api/verified-identities/:id/revoke  { reason }
 // Withdraws a verification. The row and its history are kept.
 // ======================================================
 const revokeVerifiedIdentity = async (req, res) => {

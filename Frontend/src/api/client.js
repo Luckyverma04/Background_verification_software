@@ -5,20 +5,37 @@ export const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || "http://localhost:5000/api",
 });
 
-// Reviewer name (no login in this app): sent with every request so verifications
-// and manual additions are attributed in the audit trail.
-const REVIEWER_KEY = "bgv.reviewerName";
-export const getReviewerName = () => {
-  try { return localStorage.getItem(REVIEWER_KEY) || ""; } catch { return ""; }
+// ---- Login token (JWT). Sent as "Authorization: Bearer <token>" on every request.
+const TOKEN_KEY = "bgv.token";
+export const getToken = () => {
+  try { return localStorage.getItem(TOKEN_KEY) || ""; } catch { return ""; }
 };
-export const setReviewerName = (name) => {
-  try { localStorage.setItem(REVIEWER_KEY, String(name || "").trim()); } catch { /* storage unavailable */ }
+export const setToken = (token) => {
+  try {
+    if (token) localStorage.setItem(TOKEN_KEY, token);
+    else localStorage.removeItem(TOKEN_KEY);
+  } catch { /* storage unavailable */ }
 };
 api.interceptors.request.use((config) => {
-  const name = getReviewerName();
-  if (name) config.headers["X-Reviewer"] = name;
+  const token = getToken();
+  if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
+
+// An expired / revoked session sends the user back to the login page
+let onUnauthorized = () => {};
+export const setUnauthorizedHandler = (fn) => { onUnauthorized = fn || (() => {}); };
+api.interceptors.response.use(
+  (r) => r,
+  (e) => {
+    const url = e?.config?.url || "";
+    if (e?.response?.status === 401 && !url.includes("/auth/login")) {
+      setToken("");
+      onUnauthorized();
+    }
+    return Promise.reject(e);
+  },
+);
 
 // Pull a readable message out of any axios error
 export const errMsg = (e) =>
@@ -27,11 +44,27 @@ export const errMsg = (e) =>
   e?.message ||
   "Something went wrong";
 
+// ---- Auth + users
+export const login = (email, password) =>
+  api.post("/auth/login", { email, password }).then((r) => r.data.data);
+export const getMe = () => api.get("/auth/me").then((r) => r.data.data);
+export const changePassword = (currentPassword, newPassword) =>
+  api.post("/auth/change-password", { currentPassword, newPassword }).then((r) => r.data.data);
+export const getUsers = () => api.get("/users").then((r) => r.data.data);
+export const createUser = (body) => api.post("/users", body).then((r) => r.data.data);
+export const updateUser = (id, body) => api.patch(`/users/${id}`, body).then((r) => r.data.data);
+
 // ---- Candidates
 export const getCandidates = () => api.get("/candidates").then((r) => r.data.data);
 export const getCandidate = (id) => api.get(`/candidates/${id}`).then((r) => r.data.data);
 export const createCandidate = (body) => api.post("/candidates", body).then((r) => r.data.data);
 export const deleteCandidate = (id) => api.delete(`/candidates/${id}`);
+// Uploads a photo (multipart field "image") to Cloudinary via the backend
+export const uploadCandidateImage = (file) => {
+  const form = new FormData();
+  form.append("image", file);
+  return api.post("/uploads/candidate-image", form, { timeout: 60 * 1000 }).then((r) => r.data.data);
+};
 
 // ---- BGV runs
 export const getRuns = () => api.get("/bgv-runs").then((r) => r.data.data);

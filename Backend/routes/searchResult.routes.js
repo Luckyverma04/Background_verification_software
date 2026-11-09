@@ -9,6 +9,8 @@ const {
   deleteSearchResult,
 } = require("../controllers/searchResult.controller");
 
+const { requireRole } = require("../middleware/auth.middleware");
+
 const router = express.Router();
 
 // ==========================================
@@ -45,6 +47,6 @@ router.patch("/:id", updateSearchResult);
 // DELETE SEARCH RESULT
 // DELETE /api/search-results/:id
 // ==========================================
-router.delete("/:id", deleteSearchResult);
+router.delete("/:id", requireRole("ADMIN"), deleteSearchResult);
 
 module.exports = router;

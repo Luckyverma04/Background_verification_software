@@ -137,7 +137,7 @@ const updateCandidate = async (req, res) => {
     }
 
     const candidate = await Candidate.findByIdAndUpdate(id, data, {
-      new: true,
+      returnDocument: "after",
       runValidators: true,
     });
 

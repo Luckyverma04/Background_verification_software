@@ -8,13 +8,9 @@ const {
   deleteCandidate,
 } = require("../controllers/candidate.controller");
 
+const { requireRole } = require("../middleware/auth.middleware");
+
 const router = express.Router();
-router.get("/test", (req, res) => {
-  res.json({
-    success: true,
-    message: "Candidate match routes are working",
-  });
-});
 
 // CREATE
 router.post("/", createCandidate);
@@ -29,6 +25,6 @@ router.get("/:id", getCandidateById);
 router.patch("/:id", updateCandidate);
 
 // DELETE
-router.delete("/:id", deleteCandidate);
+router.delete("/:id", requireRole("ADMIN"), deleteCandidate);
 
 module.exports = router;

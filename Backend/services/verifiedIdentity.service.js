@@ -35,19 +35,14 @@ const isId = (v) => mongoose.Types.ObjectId.isValid(String(v));
 const toId = (v) => (v && v._id ? v._id : v);
 
 // ---------------------------------------------------------------------
-// Reviewer attribution. The app has no login yet, so a reviewer is taken from
-// req.user when an auth layer exists, otherwise from the X-Reviewer header /
-// body.reviewerName that the frontend sends.
+// Reviewer attribution: always the logged-in user (set by requireAuth).
+// Client-supplied names (X-Reviewer header, body.reviewerName) are ignored,
+// so nobody can record a decision under someone else's name.
 // ---------------------------------------------------------------------
 const reviewerFromRequest = (req) => {
   const user = req?.user || null;
   const id = user?._id || user?.id || null;
-  const label =
-    clean(user?.name) ||
-    clean(user?.email) ||
-    clean(req?.headers?.["x-reviewer"]) ||
-    clean(req?.body?.reviewerName) ||
-    "";
+  const label = clean(user?.name) || clean(user?.email) || "";
   return { id: id && isId(id) ? id : null, label: label.slice(0, 120) };
 };
 
@@ -175,7 +170,7 @@ const recordVerification = async ({
     if (!Object.keys(update.$setOnInsert).length) delete update.$setOnInsert;
   }
 
-  const opts = { upsert: true, new: true, setDefaultsOnInsert: true, runValidators: true };
+  const opts = { upsert: true, returnDocument: "after", setDefaultsOnInsert: true, runValidators: true };
   let identity;
   let alreadyVerified = wasVerified;
   if (wasVerified) {
@@ -229,7 +224,7 @@ const revokeVerification = async ({ candidateId, profileUrl, identityId = null, 
         },
       },
     },
-    { new: true }
+    { returnDocument: "after" }
   );
 };
 
@@ -345,7 +340,7 @@ const flagForReReview = async ({ identityId, reasons, bgvRunId }) => {
       $set: { "needsReReview.flag": true, "needsReReview.reasons": reasons, "needsReReview.detectedAt": new Date(), "needsReReview.bgvRun": bgvRunId },
       $push: { history: { at: new Date(), action: "FLAGGED_FOR_REVIEW", bgvRun: bgvRunId, note: reasons.join(", ") } },
     },
-    { new: true }
+    { returnDocument: "after" }
   );
 };
 

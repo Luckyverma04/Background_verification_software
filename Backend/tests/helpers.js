@@ -21,6 +21,8 @@ process.env.PROVIDER_CACHE_TTL_MS = process.env.PROVIDER_CACHE_TTL_MS || "0"; //
 process.env.PERF_LOG = "false";
 process.env.ML_RETRY_DELAY_MS = "5";
 process.env.ML_BREAKER_COOLDOWN_MS = "50";
+process.env.JWT_SECRET = process.env.JWT_SECRET || "test-secret-test-secret-test-secret-0123456789";
+process.env.LOGIN_RATE_LIMIT = process.env.LOGIN_RATE_LIMIT || "1000";
 
 const http = require("http");
 const mongoose = require("mongoose");
@@ -184,10 +186,39 @@ const startAll = async () => {
 
   const base = `http://127.0.0.1:${server.address().port}/api`;
 
+  // Auth: every call is made as a logged-in user.
+  //  - default: an ADMIN ("Test Admin")
+  //  - { "X-Reviewer": "Name" }: a REVIEWER user with that name (created once),
+  //    so tests that check who made a decision keep working
+  //  - { "X-No-Auth": "1" }: no token at all (to test 401s)
+  //  - an explicit Authorization header is sent unchanged
+  const { signToken } = require("../middleware/auth.middleware");
+  const { hashPassword } = require("../utils/password");
+  const User = mongoose.models.User;
+  const tokens = new Map();
+  const tokenFor = async (name, role) => {
+    const key = `${role}:${name}`;
+    if (!tokens.has(key)) {
+      const email = `${name.toLowerCase().replace(/[^a-z0-9]+/g, ".")}.${role.toLowerCase()}@test.local`;
+      const user =
+        (await User.findOne({ email })) ||
+        (await User.create({ name, email, role, passwordHash: await hashPassword("test-password-123") }));
+      tokens.set(key, signToken(user));
+    }
+    return tokens.get(key);
+  };
+
   const call = async (method, path, body, headers = {}) => {
+    const { "X-Reviewer": reviewerName, "X-No-Auth": noAuth, ...rest } = headers;
+    if (!noAuth && !rest.Authorization) {
+      const token = reviewerName
+        ? await tokenFor(String(reviewerName), "REVIEWER")
+        : await tokenFor("Test Admin", "ADMIN");
+      rest.Authorization = `Bearer ${token}`;
+    }
     const res = await fetch(`${base}${path}`, {
       method,
-      headers: { "Content-Type": "application/json", ...headers },
+      headers: { "Content-Type": "application/json", ...rest },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
     let json = null;

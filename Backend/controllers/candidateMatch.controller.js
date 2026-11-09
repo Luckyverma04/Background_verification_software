@@ -594,7 +594,7 @@ const updateCandidateMatch = async (req, res) => {
         update.reviewedAt === undefined && statusChanged
           ? { $set: { reviewStatus: update.reviewStatus, reviewerNotes: newNotes }, $unset: { reviewedAt: 1, reviewedBy: 1 } }
           : { $set: update },
-        { new: true, runValidators: true }
+        { returnDocument: "after", runValidators: true }
       )
     );
 

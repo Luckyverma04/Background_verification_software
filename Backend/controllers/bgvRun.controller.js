@@ -126,7 +126,7 @@ const claimRun = (id, nextStatus, extra = {}) =>
   BgvRun.findOneAndUpdate(
     { _id: id, status: { $nin: BUSY_STATUSES } },
     { $set: { status: nextStatus, ...extra, error: undefined } },
-    { new: true }
+    { returnDocument: "after" }
   );
 
 // ==========================================
@@ -508,7 +508,7 @@ const searchBgvRun = async (req, res) => {
             finalResultReasons: [`Search failed: ${error.message}`],
             error: { message: error.message, code: "SEARCH_FAILED" },
           },
-          { new: true }
+          { returnDocument: "after" }
         );
 
         if (failed) {
@@ -671,7 +671,7 @@ const updateBgvRun = async (req, res) => {
     const run = await BgvRun.findByIdAndUpdate(
       id,
       { notes: body.notes },
-      { new: true, runValidators: true }
+      { returnDocument: "after", runValidators: true }
     );
 
     if (!run) {

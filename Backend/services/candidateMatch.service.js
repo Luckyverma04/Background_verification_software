@@ -1587,7 +1587,7 @@ const createMatchesForBgvRun = async ({
         reviewRequiredMatches.length,
     },
     {
-      new: true,
+      returnDocument: "after",
     }
   );
 
