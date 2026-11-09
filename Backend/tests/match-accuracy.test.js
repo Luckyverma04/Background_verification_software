@@ -84,3 +84,65 @@ test("M4. namesakes stay below STRONG", () => {
     assert.notEqual(run(c, result).matchStatus, "STRONG", label);
   }
 });
+
+// ------------------------------------------------------------------
+// Parsing real search-result shapes (Serper / Google)
+// ------------------------------------------------------------------
+const { normalizeSerperResult } = require("../services/resultMerge.service");
+const parse = (title, link, snippet) => normalizeSerperResult({ title, link, snippet });
+
+test("M5. the person's name is taken from the page title on every platform", () => {
+  assert.equal(parse("priyav (Priya Verma) · GitHub", "https://github.com/priyav", "").name, "Priya Verma");
+  assert.equal(parse("priyav · GitHub", "https://github.com/priyav", "").name, null, "a bare username is not a name");
+  assert.equal(parse("Priya Verma (@priya.verma) • Instagram photos and videos", "https://www.instagram.com/priya.verma/", "").name, "Priya Verma");
+  assert.equal(parse("Priya Verma (@priyav) / X", "https://x.com/priyav", "").name, "Priya Verma");
+  assert.equal(parse("Priya Verma on LinkedIn: Excited to share ...", "https://www.linkedin.com/posts/priya-verma_x-activity-1", "").name, "Priya Verma");
+  assert.equal(parse("Priya Verma | Facebook", "https://www.facebook.com/priya.verma.1", "").name, "Priya Verma");
+});
+
+test("M6. LinkedIn: location in the title, labelled snippet fields, no snippet text as company", () => {
+  const a = parse("Priya Verma - Bhopal, Madhya Pradesh, India | Professional Profile | LinkedIn", "https://in.linkedin.com/in/priyaverma",
+    "Bhopal, Madhya Pradesh, India · Software Engineer · TCS. Experienced engineer with a history of working in the IT industry.");
+  assert.deepEqual(a.location, { city: "Bhopal", state: "Madhya Pradesh", country: "India" });
+  assert.equal(a.company, "TCS");
+  assert.equal(a.jobTitle, "Software Engineer");
+
+  const b = parse("Priya Verma - Senior Software Engineer - Tata Consultancy Services | LinkedIn", "https://in.linkedin.com/in/pv-1",
+    "Senior Software Engineer at Tata Consultancy Services · Experience: Tata Consultancy Services · Education: Indian Institute of Technology, Indore · Location: Bhopal · 500+ connections on LinkedIn.");
+  assert.deepEqual(b.education.map((e) => e.institution), ["Indian Institute of Technology, Indore"]);
+  assert.equal(b.location.city, "Bhopal");
+
+  const c = parse("Ravi Kumar - Data Analyst - Acme | LinkedIn", "https://www.linkedin.com/in/ravi-k", "Location: London, United Kingdom");
+  assert.equal(c.location.country, "United Kingdom", "City, Country puts the country in country");
+});
+
+test("M7. sentence text does not leak into company / location", () => {
+  const fb = parse("Priya Verma | Facebook", "https://www.facebook.com/p.v",
+    "Priya Verma is on Facebook. Works at Tata Consultancy Services. Lives in Bhopal, Madhya Pradesh.");
+  assert.equal(fb.company, "Tata Consultancy Services");
+  assert.equal(fb.location.state, "Madhya Pradesh");
+  const x = parse("Priya Verma (@priyav) / X", "https://x.com/priyav", "Software engineer @TCS. Bhopal, India.");
+  assert.equal(x.company, "TCS");
+  assert.equal(x.location.city, "Bhopal");
+  const ig = parse("Priya Verma (@pv) • Instagram photos and videos", "https://www.instagram.com/pv/", "See Instagram photos and videos from Priya Verma (@pv)");
+  assert.equal(ig.location, null, "\"from <name>\" is not a location");
+});
+
+test("M8. a page title is never compared as a job title", () => {
+  const sr = { _id: "fb", ...parse("Priya Verma | Facebook", "https://www.facebook.com/p.v", "Works at Tata Consultancy Services. Lives in Bhopal, Madhya Pradesh.") };
+  const m = run(CANDIDATE, sr);
+  assert.ok(!m.conflictingSignals.some((c) => c.field === "jobTitle"));
+  assert.equal(m.matchDetails.components.jobTitle.state, "UNKNOWN");
+});
+
+test("M9. end to end: the right person's profiles rank STRONG, namesakes stay WEAK", () => {
+  const status = (t, l, s) => run(CANDIDATE, { _id: l, ...parse(t, l, s) }).matchStatus;
+  assert.equal(status("Priya Verma - Senior Software Engineer - Tata Consultancy Services | LinkedIn", "https://in.linkedin.com/in/pv-1",
+    "Experience: Tata Consultancy Services · Education: Indian Institute of Technology, Indore · Location: Bhopal"), "STRONG");
+  assert.equal(status("Priya Verma - Bhopal, Madhya Pradesh, India | Professional Profile | LinkedIn", "https://in.linkedin.com/in/pv-2",
+    "Bhopal, Madhya Pradesh, India · Software Engineer · TCS"), "STRONG");
+  assert.equal(status("Priya Verma (@priyav) / X", "https://x.com/priyav", "Software engineer @TCS. Bhopal, India."), "STRONG");
+  assert.equal(status("Priya Verma - Software Developer - Infosys | LinkedIn", "https://in.linkedin.com/in/pv-pune",
+    "Software Developer at Infosys · Location: Pune, Maharashtra, India"), "WEAK");
+  assert.equal(status("Priya Verma (@pv.official) • Instagram photos", "https://www.instagram.com/pv.official/", "Fashion & lifestyle creator, Delhi."), "WEAK");
+});

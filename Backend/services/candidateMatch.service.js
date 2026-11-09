@@ -941,6 +941,21 @@ const classifyPage = (searchResult) => {
   return { noisy, profileUrlShape: isProfileLikeUrl(searchResult) };
 };
 
+// A search result's "headline" is often just the page title
+// ("Priya Verma | Facebook", "Priya Verma (@pv) • Instagram"). That is not a
+// job title and must not be compared as one (it produced false "different
+// title" conflicts on every social profile).
+const PAGE_TITLE_WORDS = /\b(linkedin|facebook|instagram|github|twitter|youtube|medium|kaggle|behance|dribbble|gitlab|quora|reddit|profile|photos|videos|posts)\b|\(@|\s\/\s*x$/i;
+const headlineAsTitle = (searchResult) => {
+  const h = String(searchResult?.headline || "").trim();
+  if (!h) return null;
+  if (h === searchResult.title || h === searchResult.rawData?.title) return null;
+  if (PAGE_TITLE_WORDS.test(h)) return null;
+  const name = String(searchResult.name || "").trim().toLowerCase();
+  if (name && h.toLowerCase().includes(name)) return null;
+  return h;
+};
+
 const calculateCandidateMatch = (candidate, searchResult) => {
   const th = getThresholds();
   const text = getEvidenceText(searchResult);
@@ -971,7 +986,7 @@ const calculateCandidateMatch = (candidate, searchResult) => {
   // ---------- components ----------
   const name = signals.compareNames(candidate.fullName, searchResult.name);
   const company = signals.compareCompany(candidate, searchResult.company, text);
-  const title = signals.compareTitle(candidate, searchResult.jobTitle || searchResult.headline);
+  const title = signals.compareTitle(candidate, searchResult.jobTitle || headlineAsTitle(searchResult));
   const location = signals.compareLocation(candidate.location, searchResult.location, text);
   const education = signals.compareEducation(candidate.education, searchResult.education, text);
 

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { errMsg, getKnownProfiles, getPlatformMatches, getRelevantMatches, getRun, getRunPlatforms, reviewMatch, searchRun } from "../api/client";
+import { errMsg, getKnownProfiles, getPlatformMatches, getRelevantMatches, getRun, getRunPlatforms, recheckRun, reviewMatch, searchRun } from "../api/client";
 import useAsync from "../components/useAsync";
 import Icon from "../components/Icon";
 import { Avatar, Badge, Empty, ErrorBox, Loading, Notice, PageHeader, Stat } from "../components/ui";
@@ -222,6 +222,14 @@ export default function RunReview() {
     run.reload(); matches.reload(); platforms.reload(); known.reload();
   };
 
+  const recheck = async () => {
+    setRunning(true); setRunError(""); setNotice("");
+    try { await recheckRun(id); setLocal({}); setNotice("Matches re-checked with the latest matching rules. Your review decisions were kept."); }
+    catch (e) { setRunError(errMsg(e)); }
+    setRunning(false);
+    run.reload(); matches.reload(); platforms.reload(); known.reload();
+  };
+
   const refreshAll = () => { run.reload(); matches.reload(); platforms.reload(); known.reload(); };
   const openMatch = (matchId) => {
     setAdding(false); setTab("SHORTLIST");
@@ -245,6 +253,12 @@ export default function RunReview() {
       <PageHeader title={r.candidate?.fullName || "Verification"} subtitle="Search the web, then confirm which profiles really belong to this person.">
         <Badge value={r.status} />{r.finalResult && <Badge value={r.finalResult} />}
         <button className="btn" onClick={() => setAdding((a) => !a)}><Icon name="plus" size={15} />Add profile</button>
+        {r.status !== "PENDING" && (
+          <button className="btn" disabled={running || r.status === "SEARCHING"} onClick={recheck}
+            title="Re-read the stored results and score them again with the latest rules. No new web search.">
+            <Icon name="sparkle" size={15} />Re-check matches
+          </button>
+        )}
         <button className="btn primary" disabled={running || r.status === "SEARCHING"} onClick={runSearch}>
           <Icon name={r.status === "PENDING" ? "play" : "refresh"} size={15} />
           {running ? "Searching & matching…" : r.status === "PENDING" ? "Run search & match" : "Re-run search"}
