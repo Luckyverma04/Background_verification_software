@@ -16,6 +16,24 @@ Call budget (`PLATFORM_DISCOVERY_MAX_CALLS`): capacity is reserved before every 
 A confirmed / candidate-supplied profile no longer skips discovery on its platform; set `PLATFORM_DISCOVERY_SKIP_COVERED=true` to opt back in.
 
 
+## Login and users
+
+Every API route except `GET /api/health` and `POST /api/auth/login` needs a logged-in user
+(`Authorization: Bearer <token>`). Roles: `REVIEWER` (review candidates, runs, sheet import) and
+`ADMIN` (also deletes records and manages users on the **Users** page).
+
+First start:
+1. In `Backend/.env` set `JWT_SECRET` (min 32 random characters), `ADMIN_EMAIL`, `ADMIN_PASSWORD` and
+   `CORS_ORIGIN` (the frontend URL, default `http://localhost:5173`). Generate a secret with
+   `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"`.
+2. Start the backend: the first admin is created only while there are no users. Remove `ADMIN_PASSWORD` afterwards.
+3. Log in, open **Users**, add a login for each reviewer.
+
+Decisions are recorded against the logged-in user; the old `X-Reviewer` header / `reviewerName` field is ignored.
+Disabling a user or resetting / changing a password ends that user's sessions immediately.
+Failed logins are limited to 10 per IP per 15 minutes (`LOGIN_RATE_LIMIT`).
+
+
 ## Matching, ranking and exclusions (v5)
 
 * `services/matchSignals.service.js` – pure name / company / title / location / education comparison and signal validation.

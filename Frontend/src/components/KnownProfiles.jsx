@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { addProfile, errMsg, getReviewerName, setReviewerName } from "../api/client";
+import { addProfile, errMsg } from "../api/client";
+import { useAuth } from "../auth/AuthContext";
 import { Badge, fmtDate } from "./ui";
 
 export const PLATFORM_OPTIONS = [
@@ -68,7 +69,7 @@ export function KnownProfilesPanel({ known }) {
 /** "Add profile" form: works without any external search. */
 export function AddProfileForm({ runId, candidateName, onClose, onAdded }) {
   const [form, setForm] = useState({ platform: "AUTO", profileUrl: "", username: "", displayName: "", notes: "", evidenceSource: "", mode: "REVIEW" });
-  const [reviewer, setReviewer] = useState(getReviewerName());
+  const { user } = useAuth();
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [msg, setMsg] = useState("");
@@ -79,10 +80,8 @@ export function AddProfileForm({ runId, candidateName, onClose, onAdded }) {
     e.preventDefault();
     setErr(""); setMsg(""); setDup(null);
     if (!form.profileUrl.trim()) return setErr("Enter the profile URL.");
-    if (form.mode === "VERIFIED" && !reviewer.trim()) return setErr("Enter your name – verification is recorded against a named reviewer.");
     setBusy(true);
     try {
-      setReviewerName(reviewer);
       const body = {
         profileUrl: form.profileUrl.trim(), mode: form.mode,
         ...(form.platform !== "AUTO" ? { platform: form.platform } : {}),
@@ -90,7 +89,6 @@ export function AddProfileForm({ runId, candidateName, onClose, onAdded }) {
         ...(form.displayName.trim() ? { displayName: form.displayName.trim() } : {}),
         ...(form.notes.trim() ? { notes: form.notes.trim() } : {}),
         ...(form.evidenceSource.trim() ? { evidenceSource: form.evidenceSource.trim() } : {}),
-        ...(reviewer.trim() ? { reviewerName: reviewer.trim() } : {}),
       };
       const r = await addProfile(runId, body);
       if (!r.ok) { setDup(r); }
@@ -128,8 +126,8 @@ export function AddProfileForm({ runId, candidateName, onClose, onAdded }) {
         <label>Source / evidence
           <input value={form.evidenceSource} onChange={set("evidenceSource")} placeholder="e.g. link on CV, HR email" />
         </label>
-        <label>Your name
-          <input value={reviewer} onChange={(e) => setReviewer(e.target.value)} placeholder="recorded in the audit trail" />
+        <label>Recorded as
+          <input value={user?.name || ""} disabled title="Decisions are recorded against your login" />
         </label>
       </div>
       <div className="row" style={{ margin: "8px 0" }}>

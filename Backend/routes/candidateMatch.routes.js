@@ -11,6 +11,8 @@ const {
   deleteCandidateMatch,
 } = require("../controllers/candidateMatch.controller");
 
+const { requireRole } = require("../middleware/auth.middleware");
+
 const router = express.Router();
 
 
@@ -81,6 +83,7 @@ router.patch(
 
 router.delete(
   "/:id",
+  requireRole("ADMIN"),
   deleteCandidateMatch
 );
 

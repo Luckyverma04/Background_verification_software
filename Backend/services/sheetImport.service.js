@@ -343,7 +343,7 @@ const importRow = async ({ cfg, sheetId, tab, rowNumber, mapped, summary }) => {
 };
 
 // ---------------------------------------------------------------- listing (completeness is computed live)
-const labelOf = (req) => map.clean(req?.user?.name || req?.headers?.["x-reviewer"] || req?.body?.reviewerName) || "reviewer";
+const labelOf = (req) => map.clean(req?.user?.name || req?.user?.email) || "reviewer";
 
 const listItems = async ({ limit = 500 } = {}) => {
   const cfg = getConfig();

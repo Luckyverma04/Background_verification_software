@@ -5,12 +5,20 @@ const app = require("./app");
 
 const PORT = process.env.PORT || 5000;
 
+if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
+  console.error(
+    "JWT_SECRET is missing or shorter than 32 characters. Add a long random value to .env, e.g.\n" +
+      "  node -e \"console.log(require('crypto').randomBytes(48).toString('hex'))\""
+  );
+  process.exit(1);
+}
+
 // ==========================================
 // DATABASE CONNECTION
 // ==========================================
 mongoose
   .connect(process.env.MONGO_URI)
-  .then(() => {
+  .then(async () => {
     console.log("MongoDB connected successfully ✅");
 
     // Unique indexes (no duplicate profiles / matches / evidence) are built
@@ -28,6 +36,8 @@ mongoose
         }
       });
     });
+
+    await require("./controllers/auth.controller").ensureFirstAdmin();
 
     require("./services/sheetImport.service").startAutoSync();
 

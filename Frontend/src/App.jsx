@@ -1,4 +1,5 @@
-import { BrowserRouter, Outlet, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
+import { AuthProvider, useAuth } from "./auth/AuthContext";
 import Sidebar from "./layout/Sidebar";
 import Topbar from "./layout/Topbar";
 import Dashboard from "./pages/Dashboard";
@@ -8,7 +9,24 @@ import AddCandidate from "./pages/AddCandidate/AddCandidate";
 import SheetImport from "./pages/SheetImport";
 import Runs from "./pages/Runs";
 import RunReview from "./pages/RunReview";
+import Login from "./pages/Login";
+import Account from "./pages/Account";
+import Users from "./pages/Users";
 import "./App.css";
+
+// Pages inside the app need a logged-in user
+function RequireAuth({ children }) {
+  const { user } = useAuth();
+  const location = useLocation();
+  if (user === undefined) return <div className="state">Checking login…</div>;
+  if (!user) return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />;
+  return children;
+}
+
+function AdminOnly({ children }) {
+  const { user } = useAuth();
+  return user?.role === "ADMIN" ? children : <div className="state">Only admins can open this page.</div>;
+}
 
 function Layout() {
   return (
@@ -24,9 +42,11 @@ function Layout() {
 
 export default function App() {
   return (
+    <AuthProvider>
     <BrowserRouter>
       <Routes>
-        <Route element={<Layout />}>
+        <Route path="login" element={<Login />} />
+        <Route element={<RequireAuth><Layout /></RequireAuth>}>
           <Route index element={<Dashboard />} />
           <Route path="candidates" element={<Candidates />} />
           <Route path="candidates/new" element={<AddCandidate />} />
@@ -34,9 +54,12 @@ export default function App() {
           <Route path="sheet-import" element={<SheetImport />} />
           <Route path="runs" element={<Runs />} />
           <Route path="runs/:id" element={<RunReview />} />
+          <Route path="account" element={<Account />} />
+          <Route path="users" element={<AdminOnly><Users /></AdminOnly>} />
           <Route path="*" element={<div className="state">Page not found</div>} />
         </Route>
       </Routes>
     </BrowserRouter>
+    </AuthProvider>
   );
 }

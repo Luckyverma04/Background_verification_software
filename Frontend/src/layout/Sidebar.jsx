@@ -1,4 +1,5 @@
 import { NavLink } from "react-router-dom";
+import { useAuth } from "../auth/AuthContext";
 
 const links = [
   { to: "/", label: "Dashboard", icon: "▦", end: true },
@@ -9,11 +10,13 @@ const links = [
 ];
 
 export default function Sidebar() {
+  const { user } = useAuth();
+  const items = user?.role === "ADMIN" ? [...links, { to: "/users", label: "Users", icon: "⚙" }] : links;
   return (
     <aside className="sidebar">
       <div className="brand"><span className="logo">B</span> BGV Automation</div>
       <nav>
-        {links.map((l) => (
+        {items.map((l) => (
           <NavLink key={l.to} to={l.to} end={l.end} className={({ isActive }) => (isActive ? "active" : "")}>
             <span className="ico">{l.icon}</span>{l.label}
           </NavLink>
