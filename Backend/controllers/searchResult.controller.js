@@ -272,7 +272,7 @@ const updateSearchResult = async (req, res) => {
       id,
       updateData,
       {
-        new: true,
+        returnDocument: "after",
         runValidators: true,
       }
     ).populate("bgvRun");

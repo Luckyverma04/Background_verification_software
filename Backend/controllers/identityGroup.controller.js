@@ -525,7 +525,7 @@ const updateIdentityGroup = async (req, res) => {
         { _id: id, reviewStatus: existing.reviewStatus },
         { $set: updateData },
         {
-          new: true,
+          returnDocument: "after",
           runValidators: true,
         }
       )

@@ -401,7 +401,7 @@ const createEvidenceForIdentityGroup = async ({
         {
           identityGroup: identityGroup._id,
         },
-        { new: true }
+        { returnDocument: "after" }
       );
     }
 

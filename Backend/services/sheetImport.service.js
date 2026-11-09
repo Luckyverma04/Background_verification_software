@@ -536,7 +536,7 @@ const workerLoop = async () => {
     const row = await SheetImportRow.findOneAndUpdate(
       { searchStatus: "QUEUED" },
       { $set: { searchStatus: "RUNNING", searchStartedAt: new Date(), searchError: undefined }, $inc: { attempts: 1 } },
-      { sort: { queuedAt: 1 }, new: true }
+      { sort: { queuedAt: 1 }, returnDocument: "after" }
     );
     if (!row) return;
     if (active.has(String(row._id))) continue;

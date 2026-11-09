@@ -1069,7 +1069,7 @@ const updateExistingResult = async (
 
       {
 
-        new: true,
+        returnDocument: "after",
 
         runValidators: true,
 

@@ -2393,7 +2393,7 @@ const confirmIdentityMerge = async ({
         target._id,
         { $set: payload },
         {
-          new: true,
+          returnDocument: "after",
           runValidators: true,
         }
       );

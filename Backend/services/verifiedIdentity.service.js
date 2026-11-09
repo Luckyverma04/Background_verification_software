@@ -175,7 +175,7 @@ const recordVerification = async ({
     if (!Object.keys(update.$setOnInsert).length) delete update.$setOnInsert;
   }
 
-  const opts = { upsert: true, new: true, setDefaultsOnInsert: true, runValidators: true };
+  const opts = { upsert: true, returnDocument: "after", setDefaultsOnInsert: true, runValidators: true };
   let identity;
   let alreadyVerified = wasVerified;
   if (wasVerified) {
@@ -229,7 +229,7 @@ const revokeVerification = async ({ candidateId, profileUrl, identityId = null, 
         },
       },
     },
-    { new: true }
+    { returnDocument: "after" }
   );
 };
 
@@ -345,7 +345,7 @@ const flagForReReview = async ({ identityId, reasons, bgvRunId }) => {
       $set: { "needsReReview.flag": true, "needsReReview.reasons": reasons, "needsReReview.detectedAt": new Date(), "needsReReview.bgvRun": bgvRunId },
       $push: { history: { at: new Date(), action: "FLAGGED_FOR_REVIEW", bgvRun: bgvRunId, note: reasons.join(", ") } },
     },
-    { new: true }
+    { returnDocument: "after" }
   );
 };
 
