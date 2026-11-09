@@ -66,7 +66,12 @@ function MatchCard({ match, onReviewed }) {
         </div>
         <div className="score">
           <div className="ring" style={{ "--p": Math.min(Math.max(score, 0), 100), "--c": ringColor }}><b>{score}</b></div>
-          <div className="ring-label">similarity</div>
+          <div className="ring-label">match score</div>
+          {match.matchDetails?.identity?.maxAchievable < 100 && (
+            <div className="ring-label" title="Some details are missing on the candidate or the profile, so this is the highest score possible with the data available.">
+              max {match.matchDetails.identity.maxAchievable} with this data
+            </div>
+          )}
           <div className="row" style={{ justifyContent: "flex-end" }}>
             <Badge value={match.matchStatus} />
             {match.reviewPriority && <Badge value={String(match.reviewPriority).toUpperCase()} />}

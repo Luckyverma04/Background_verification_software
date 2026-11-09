@@ -934,7 +934,7 @@ const PENALTY_PER_POINT = 8;
 const PENALTY_MAX = 24;
 const EVIDENCE_CAPS = [40, 70, 90, 100]; // independent corroborators 0,1,2,3+
 
-const MATCH_ENGINE_VERSION = 4;
+const MATCH_ENGINE_VERSION = 5;
 
 const classifyPage = (searchResult) => {
   const noisy = isNoisyPage(searchResult);
@@ -1110,12 +1110,34 @@ const calculateCandidateMatch = (candidate, searchResult) => {
   if (directUrlMatch) similarityScore = 100;
   similarityScore = Math.round(similarityScore);
 
+  // ---------- coverage: how much of what COULD be compared agrees ----------
+  // A candidate with only name + company + city can never reach 80 points
+  // (40 + 25 + 12 = 77) even when everything matches. Coverage measures the
+  // score against the maximum that the available data allows.
+  const comparableFields = [["company", company], ["jobTitle", title], ["location", location], ["education", education]]
+    .filter(([, comp]) => comp.score !== null && comp.score !== undefined)
+    .map(([field]) => field);
+  const maxAchievable = WEIGHTS.name + comparableFields.reduce((sum, f) => sum + WEIGHTS[f], 0);
+  const coverage = nameKnown ? Math.max(0, Math.min(1, raw / maxAchievable)) : 0;
+
   // ---------- status ----------
   const hardCount = contradictions.filter((c) => c.severity === "HARD").length;
   const idContradiction = contradictions
     .filter((c) => c.field !== "pageType")
     .reduce((s, c) => s + c.weight, 0);
   const nameOk = name.state === "MATCH" || name.state === "PARTIAL";
+  const currentEmployerConfirmed = company.state === "MATCH" && company.employer === "CURRENT" && company.source === "FIELD";
+  const cityConfirmed = location.state === "MATCH" && location.level === "CITY";
+  // Everything that can be compared agrees, including the current employer
+  // AND the city (name + employer + city is the minimum for STRONG this way).
+  const completeAgreement =
+    name.state === "MATCH" &&
+    currentEmployerConfirmed &&
+    cityConfirmed &&
+    independentCount >= 2 &&
+    idContradiction === 0 &&
+    coverage >= 0.9 &&
+    similarityScore >= th.possibleMin;
   const reasons = [];
   let matchStatus;
 
@@ -1143,6 +1165,9 @@ const calculateCandidateMatch = (candidate, searchResult) => {
   ) {
     matchStatus = "STRONG";
     reasons.push("NAME_PLUS_MULTIPLE_INDEPENDENT_EVIDENCE");
+  } else if (completeAgreement && hardCount === 0) {
+    matchStatus = "STRONG";
+    reasons.push("NAME_PLUS_ALL_AVAILABLE_EVIDENCE");
   } else if (nameOk && independentCount >= 1 && similarityScore >= th.possibleMin && name.score >= 70) {
     matchStatus = "POSSIBLE";
     reasons.push("NAME_PLUS_INDEPENDENT_EVIDENCE");
@@ -1175,6 +1200,9 @@ const calculateCandidateMatch = (candidate, searchResult) => {
       score: similarityScore,
       rawScore: Math.round(raw),
       evidenceCap,
+      coverage: Number(coverage.toFixed(2)),
+      maxAchievable,
+      comparableFields,
       independentEvidence: independent.map((c) => c.field),
       independentCount,
       nameContribution: Number(nameBase.toFixed(1)),
@@ -1218,7 +1246,7 @@ const calculateCandidateMatch = (candidate, searchResult) => {
     if (domainRelevance.score === 0) parts.push("Job domain looks different (ranking only; not an identity conflict).");
     if (page.noisy) parts.push("Result is not a personal profile page.");
   }
-  parts.push(`Score ${similarityScore}/100 (cap ${evidenceCap}); status ${matchStatus} [${reasons.join(", ")}].`);
+  parts.push(`Score ${similarityScore}/100 (cap ${evidenceCap}); ${Math.round(raw)} of ${maxAchievable} possible with the data available; status ${matchStatus} [${reasons.join(", ")}].`);
   if (conflictingSignals.length) {
     parts.push(
       `Conflicts: ${conflictingSignals.map((c) => `${c.field}(${c.severity})`).join(", ")}.`
