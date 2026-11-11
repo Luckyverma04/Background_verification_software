@@ -1,16 +1,21 @@
-# React + Vite
+# BGV Automation – Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+React 19 + Vite UI for BGV Automation. Setup, configuration and usage are in the [main README](../README.md).
 
-Currently, two official plugins are available:
+```bash
+npm install
+npm run dev      # http://localhost:5173
+npm run build    # production build in dist/
+npm run lint     # oxlint
+```
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+The API address defaults to `http://localhost:5000/api`; set `VITE_API_URL` in `Frontend/.env` to change it.
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+| Folder | Contents |
+|---|---|
+| `src/pages/` | Dashboard, Candidates, Candidate detail, Add candidate, Runs, Run review, Google Sheet, Users, Account, Login |
+| `src/components/` | UI kit (`ui.jsx`), icons (`Icon.jsx`), known-profiles panel |
+| `src/layout/` | sidebar and top bar |
+| `src/auth/` | login state (`AuthContext`) |
+| `src/api/client.js` | every API call; adds the login token and logs out on 401 |
+| `src/index.css`, `src/App.css` | design tokens (light / dark) and component styles |
