@@ -22,6 +22,14 @@ const { requireAuth } = require("./middleware/auth.middleware");
 
 const app = express();
 
+// Behind a hosting proxy (Render, Railway, Nginx …) set TRUST_PROXY=1 so the
+// client's real IP is used, e.g. by the login rate limit. Without it every
+// user would share the proxy's IP and one limit.
+if (process.env.TRUST_PROXY) {
+  const hops = Number(process.env.TRUST_PROXY);
+  app.set("trust proxy", Number.isFinite(hops) ? hops : process.env.TRUST_PROXY);
+}
+
 // ==========================================
 // MIDDLEWARE
 // ==========================================

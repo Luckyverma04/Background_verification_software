@@ -9,10 +9,13 @@ Background verification with a human in the loop. Give the app a candidate (name
 
 Nothing is ever approved automatically. The score only decides what a human looks at first.
 
+![Dashboard](docs/screenshots/dashboard.png)
+
 ---
 
 ## Contents
 
+- [Screenshots](#screenshots)
 - [Features](#features)
 - [Tech stack](#tech-stack)
 - [Project structure](#project-structure)
@@ -25,9 +28,30 @@ Nothing is ever approved automatically. The score only decides what a human look
 - [API overview](#api-overview)
 - [Tests and benchmarks](#tests-and-benchmarks)
 - [Performance and cost controls](#performance-and-cost-controls)
+- [Deploy on Render](#deploy-on-render)
 - [Troubleshooting](#troubleshooting)
 
 ---
+
+## Screenshots
+
+_All screenshots use made-up demo data._
+
+**Review a verification run**: score ring, matching details, conflicts and the Same person / Not them decision.
+
+![Run review](docs/screenshots/review.png)
+
+| Candidate profile | Add candidate |
+|---|---|
+| ![Candidate profile](docs/screenshots/candidate.png) | ![Add candidate](docs/screenshots/add.png) |
+
+| Login | Users (admin) |
+|---|---|
+| ![Login](docs/screenshots/login.png) | ![Users](docs/screenshots/users.png) |
+
+| Dark mode | Phone |
+|---|---|
+| ![Dark mode](docs/screenshots/review-dark.png) | <img src="docs/screenshots/mobile.png" alt="Phone layout" width="260"> |
 
 ## Features
 
@@ -364,6 +388,74 @@ Frontend: `npm run build` and `npm run lint` in `Frontend`.
 
 ---
 
+## Deploy on Render
+
+The app is deployed as two Render services plus a hosted MongoDB. Render has no managed MongoDB, so use **MongoDB Atlas** (free tier is enough to start).
+
+### 1. MongoDB Atlas
+
+1. Create a free cluster at [mongodb.com/atlas](https://www.mongodb.com/atlas).
+2. **Database Access**: add a database user with a password.
+3. **Network Access**: add `0.0.0.0/0` (Render's outgoing IPs are not fixed on the free plan).
+4. **Connect → Drivers**: copy the `mongodb+srv://…` string, put your password in it and add a database name, e.g. `…mongodb.net/bgv?retryWrites=true&w=majority`.
+
+### 2. Backend: Render **Web Service**
+
+In the Render dashboard: **New → Web Service** → connect your GitHub account and pick this repository.
+
+| Setting | Value |
+|---|---|
+| Root Directory | `Backend` |
+| Runtime | Node |
+| Build Command | `npm ci --omit=dev` |
+| Start Command | `npm start` |
+| Health Check Path | `/api/health` |
+
+**Environment** (Render sets `PORT` itself; do not add it):
+
+| Key | Value |
+|---|---|
+| `NODE_VERSION` | `20` |
+| `MONGO_URI` | the Atlas string from step 1 |
+| `JWT_SECRET` | a long random string (see Quick start) |
+| `ADMIN_EMAIL`, `ADMIN_PASSWORD` | your first admin login (remove the password after the first successful start) |
+| `CORS_ORIGIN` | the frontend URL from step 3, e.g. `https://bgv-frontend.onrender.com` (no trailing slash) |
+| `TRUST_PROXY` | `1` (Render sits behind a proxy; needed so the login rate limit sees real client IPs) |
+| `TAVILY_API_KEY`, `SERPER_API_KEY` | search keys |
+| `CLOUDINARY_*`, `GITHUB_TOKEN`, `GOOGLE_*` | optional, as in [Configuration](#configuration) |
+
+For the Google Sheet key, use **Secret Files** in Render (e.g. `google-sa.json`) and set `GOOGLE_SERVICE_ACCOUNT_JSON` to its path (`/etc/secrets/google-sa.json`), or paste the JSON itself into that variable.
+
+After the deploy, open `https://<your-backend>.onrender.com/api/health`; it should answer `{"success":true,…}`.
+
+### 3. Frontend: Render **Static Site**
+
+**New → Static Site** → same repository.
+
+| Setting | Value |
+|---|---|
+| Root Directory | `Frontend` |
+| Build Command | `npm ci && npm run build` |
+| Publish Directory | `dist` |
+| Environment | `VITE_API_URL` = `https://<your-backend>.onrender.com/api` |
+
+Then, under the static site's **Redirects/Rewrites**, add a rewrite so page reloads on routes like `/runs/123` work:
+
+| Source | Destination | Action |
+|---|---|---|
+| `/*` | `/index.html` | Rewrite |
+
+`VITE_API_URL` is baked in at build time: after changing it, trigger a new deploy of the static site. If you change the frontend URL, update `CORS_ORIGIN` on the backend too.
+
+### Notes
+
+- **Free plan sleeps**: a free web service stops after a period without traffic; the first request afterwards takes about a minute, and the Google Sheet auto-sync does not run while it sleeps. Use a paid instance for a team.
+- **ML service**: BGE-M3 needs several GB of RAM, more than the free plan offers. The app works without it (rule-based ranking). To run it, deploy `Backend/ml-service` as a separate Python web service on a large enough instance (start command `uvicorn app:app --host 0.0.0.0 --port $PORT`) and set `ML_SERVICE_URL` on the backend.
+- **Updates**: Render redeploys automatically on every push to the connected branch (usually `main`).
+- Menu names in the Render dashboard change over time; if a label differs, look for the same setting nearby.
+
+---
+
 ## Troubleshooting
 
 | Problem | Fix |
@@ -377,4 +469,7 @@ Frontend: `npm run build` and `npm run lint` in `Frontend`.
 | Browser shows a CORS error | add the frontend's address to `CORS_ORIGIN` and restart the backend |
 | Photo upload fails | set the `CLOUDINARY_*` variables |
 | Old runs still show old scores | open the run and press **Re-check matches** |
+| Render: CORS error after deploy | `CORS_ORIGIN` must be exactly the frontend URL (`https://…onrender.com`, no trailing slash) |
+| Render: page not found when reloading `/runs/…` | add the `/*` → `/index.html` rewrite on the static site |
+| Render: login blocked for everyone after a few wrong passwords | set `TRUST_PROXY=1` on the backend |
 | `Index build FAILED … duplicate records` on start | run `npm run report:duplicates` (read-only) to see which records collide |
