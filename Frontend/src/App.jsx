@@ -13,6 +13,7 @@ import RunReview from "./pages/RunReview";
 import Login from "./pages/Login";
 import Account from "./pages/Account";
 import Users from "./pages/Users";
+import RunReport from "./pages/RunReport";
 import { Empty, Loading } from "./components/ui";
 import "./App.css";
 
@@ -49,6 +50,7 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="login" element={<Login />} />
+        <Route path="runs/:id/report" element={<RequireAuth><RunReport /></RequireAuth>} />
         <Route element={<RequireAuth><Layout /></RequireAuth>}>
           <Route index element={<Dashboard />} />
           <Route path="candidates" element={<Candidates />} />

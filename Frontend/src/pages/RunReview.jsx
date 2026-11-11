@@ -252,6 +252,11 @@ export default function RunReview() {
       </div>
       <PageHeader title={r.candidate?.fullName || "Verification"} subtitle="Search the web, then confirm which profiles really belong to this person.">
         <Badge value={r.status} />{r.finalResult && <Badge value={r.finalResult} />}
+        {r.status !== "PENDING" && (
+          <Link className="btn" to={`/runs/${id}/report`} title="Printable report; use Print → Save as PDF">
+            <Icon name="list" size={15} />Report
+          </Link>
+        )}
         <button className="btn" onClick={() => setAdding((a) => !a)}><Icon name="plus" size={15} />Add profile</button>
         {r.status !== "PENDING" && (
           <button className="btn" disabled={running || r.status === "SEARCHING"} onClick={recheck}

@@ -27,6 +27,12 @@
   --violet: #6b3fd6; --violet-bg: #efe8ff;
   --gray: #59607a;   --gray-bg: #eef0f6;
 
+  /* charts (validated: lightness band, CVD separation, contrast) */
+  --chart-1: #5046e5;
+  --chart-ok: #0f7a55;
+  --chart-bad: #c4372b;
+  --chart-grid: #e9ebf2;
+
   --radius: 14px;
   --radius-sm: 10px;
   --shadow-sm: 0 1px 2px rgba(16, 20, 45, 0.05);
@@ -65,6 +71,11 @@
     --blue: #8fb5ff;   --blue-bg: #162a52;
     --violet: #c2a8ff; --violet-bg: #2b1f55;
     --gray: #b0b5cf;   --gray-bg: #22264a;
+
+    --chart-1: #7c74ff;
+    --chart-ok: #1f9d6d;
+    --chart-bad: #ec5a4a;
+    --chart-grid: #23274a;
 
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px -10px rgba(0, 0, 0, 0.5);
