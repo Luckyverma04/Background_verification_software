@@ -14,6 +14,7 @@ const {
   enrichBgvRunImages,
 } = require("../controllers/bgvRun.controller");
 const { addProfileToRun, getKnownProfiles } = require("../controllers/profile.controller");
+const { getRunReport } = require("../controllers/report.controller");
 
 const router = express.Router();
 
@@ -54,6 +55,7 @@ router.get("/:id/known-profiles", getKnownProfiles);
 router.post("/:id/final-result", setFinalResult);
 router.post("/:id/renormalize", renormalizeBgvRun);
 router.post("/:id/enrich-images", enrichBgvRunImages);
+router.get("/:id/report", getRunReport);
 router.get("/:id", getBgvRunById);
 
 // ==========================================

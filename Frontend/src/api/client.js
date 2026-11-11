@@ -54,6 +54,14 @@ export const getUsers = () => api.get("/users").then((r) => r.data.data);
 export const createUser = (body) => api.post("/users", body).then((r) => r.data.data);
 export const updateUser = (id, body) => api.patch(`/users/${id}`, body).then((r) => r.data.data);
 
+// ---- Reports + dashboard statistics
+export const getRunReport = (id) => api.get(`/bgv-runs/${id}/report`).then((r) => r.data.data);
+export const getStats = (days = 14) => {
+  let tz = "UTC";
+  try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"; } catch { /* default */ }
+  return api.get("/stats", { params: { days, tz } }).then((r) => r.data.data);
+};
+
 // ---- Candidates
 export const getCandidates = () => api.get("/candidates").then((r) => r.data.data);
 export const getCandidate = (id) => api.get(`/candidates/${id}`).then((r) => r.data.data);

@@ -49,6 +49,10 @@ _All screenshots use made-up demo data._
 |---|---|
 | ![Login](docs/screenshots/login.png) | ![Users](docs/screenshots/users.png) |
 
+| Printable report (Save as PDF) | Dashboard activity charts |
+|---|---|
+| ![Verification report](docs/screenshots/report.png) | ![Dashboard charts](docs/screenshots/dashboard-dark.png) |
+
 | Dark mode | Phone |
 |---|---|
 | ![Dark mode](docs/screenshots/review-dark.png) | <img src="docs/screenshots/mobile.png" alt="Phone layout" width="260"> |
@@ -64,6 +68,8 @@ _All screenshots use made-up demo data._
 - **Verified identity registry**: an approved profile is remembered for the candidate and is not asked again on the next run. A changed profile is sent back for re-review.
 - **Login and roles**: every API call needs a login. Admins manage users and can delete records; reviewers review.
 - **Audit trail**: every run, search, decision and change is logged against the logged-in reviewer.
+- **Verification report**: a printable report per run (candidate details, final result, verified and rejected profiles with reviewer, time and notes, audit trail). Use the browser's *Print → Save as PDF*.
+- **Dashboard charts**: runs per day, review decisions per day, runs by status and final result, and decisions per reviewer for the last 14 / 30 / 90 days.
 - **Modern UI**: light and dark mode, works on phones.
 
 ## Tech stack
@@ -262,6 +268,7 @@ Every API route except `GET /api/health` and `POST /api/auth/login` needs `Autho
 4. **Add profile**: if you already know a profile the search did not find, add it directly; mark it *Verified* to record it in the registry.
 5. **Re-check matches**: re-reads the stored results and re-scores them with the latest rules, without a new (paid) search. Your decisions are kept.
 6. **Re-run search**: runs a fresh web search. Verified profiles from earlier runs are reused and not asked again.
+7. **Report**: on the run page press **Report**, then **Print / Save as PDF** to get a PDF for the candidate's file.
 
 ---
 
@@ -344,11 +351,12 @@ Base URL `http://localhost:5000/api`. All routes except the first two need a log
 | Users (admin) | `GET /users` · `POST /users` · `PATCH /users/:id` |
 | Candidates | `GET /candidates` · `POST /candidates` · `GET/PATCH /candidates/:id` · `DELETE /candidates/:id` (admin) |
 | Uploads | `POST /uploads/candidate-image` (multipart field `image`) |
-| Runs | `GET/POST /bgv-runs` · `GET/PATCH /bgv-runs/:id` · `POST /bgv-runs/:id/search` · `POST /bgv-runs/:id/match` · `POST /bgv-runs/:id/renormalize` · `GET /bgv-runs/:id/platforms` · `GET /bgv-runs/:id/known-profiles` · `POST /bgv-runs/:id/profiles` · `GET/POST /bgv-runs/:id/final-result` |
+| Runs | `GET/POST /bgv-runs` · `GET/PATCH /bgv-runs/:id` · `GET /bgv-runs/:id/report` · `POST /bgv-runs/:id/search` · `POST /bgv-runs/:id/match` · `POST /bgv-runs/:id/renormalize` · `GET /bgv-runs/:id/platforms` · `GET /bgv-runs/:id/known-profiles` · `POST /bgv-runs/:id/profiles` · `GET/POST /bgv-runs/:id/final-result` |
 | Matches | `GET /candidate-matches/run/:id/relevant` (`?view=excluded`) · `GET /candidate-matches/run/:id/platform/:PLATFORM` · `PATCH /candidate-matches/:id` (review) |
 | Search results | `GET /search-results/run/:bgvRunId` · `GET/PATCH /search-results/:id` |
 | Verified identities | `GET /verified-identities` · `POST /verified-identities/:id/revoke` |
 | Audit log | `GET /verification-logs/run/:bgvRunId` |
+| Dashboard | `GET /stats?days=14&tz=Asia/Kolkata` (runs per day, decisions per day / per reviewer, status and result counts) |
 | Google Sheet | `GET /sheet-import/status` · `POST /sheet-import/sync` · `GET /sheet-import/items` · `POST /sheet-import/confirm` · `/unconfirm` · `/queue/start` · `/queue/retry` · `/queue/cancel` |
 
 Errors always look like `{ "success": false, "message": "…" }` with a matching HTTP status (400, 401, 403, 404, 409, 500).
