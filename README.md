@@ -481,3 +481,20 @@ Then, under the static site's **Redirects/Rewrites**, add a rewrite so page relo
 | Render: page not found when reloading `/runs/…` | add the `/*` → `/index.html` rewrite on the static site |
 | Render: login blocked for everyone after a few wrong passwords | set `TRUST_PROXY=1` on the backend |
 | `Index build FAILED … duplicate records` on start | run `npm run report:duplicates` (read-only) to see which records collide |
+
+## 🖼️ Image links
+
+Direct links to every image (for LinkedIn, resume or portfolio):
+
+| Image | Link |
+|---|---|
+| Dashboard | https://raw.githubusercontent.com/Luckyverma04/Background_verification_software/main/docs/screenshots/dashboard.png |
+| Run review | https://raw.githubusercontent.com/Luckyverma04/Background_verification_software/main/docs/screenshots/review.png |
+| Candidate profile | https://raw.githubusercontent.com/Luckyverma04/Background_verification_software/main/docs/screenshots/candidate.png |
+| Add candidate | https://raw.githubusercontent.com/Luckyverma04/Background_verification_software/main/docs/screenshots/add.png |
+| Login | https://raw.githubusercontent.com/Luckyverma04/Background_verification_software/main/docs/screenshots/login.png |
+| Users | https://raw.githubusercontent.com/Luckyverma04/Background_verification_software/main/docs/screenshots/users.png |
+| Verification report | https://raw.githubusercontent.com/Luckyverma04/Background_verification_software/main/docs/screenshots/report.png |
+| Dashboard charts | https://raw.githubusercontent.com/Luckyverma04/Background_verification_software/main/docs/screenshots/dashboard-dark.png |
+| Dark mode | https://raw.githubusercontent.com/Luckyverma04/Background_verification_software/main/docs/screenshots/review-dark.png |
+| mobile | https://raw.githubusercontent.com/Luckyverma04/Background_verification_software/main/docs/screenshots/mobile.png |
